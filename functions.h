@@ -117,7 +117,7 @@ void matrix_multiply(const double *A, const double *B, double *C, size_t p,
                 C[i * r + j + 3] += temp * B[k * r + j + 3];
             }
 
-            for (j = 0; j < r; ++j) {
+            for (; j < r; ++j) {
                 C[i * r + j] += temp * B[k * r + j];
             }
         }
