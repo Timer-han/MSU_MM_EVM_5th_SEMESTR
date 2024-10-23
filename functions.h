@@ -1,18 +1,33 @@
 #include <iostream>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <limits>
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define ABS(a) ((a) > 0 ? (a) : (-a))
 
-double EPS = 1.;
+double EPS = std::numeric_limits<double>::epsilon();
 
+int run(double *matrix,
+        double *inversed_matrix,
+        double *block_A,
+        double *block_B,
+        double *block_C,
+        size_t n,
+        size_t m,
+        size_t k,
+        size_t l,
+        size_t s,
+        char *filename);
+int find_diff(double *matrix, double *inversed_matrix, char* filename, int n, int m, int s, double &r1, double &r2);
 int fill_matrix(double *matrix, size_t n, size_t s);
 int read_matrix_from_file(double *matrix, size_t n, const char *filename);
 void unit_matrix(double *matrix, size_t n);
 void rows_permutation(double *A, double *block1, double *block2, size_t n,
-                      size_t m, size_t k, size_t l, size_t i1, size_t i2);
+                      size_t m, size_t k, size_t l, size_t i1, size_t i2,
+                      size_t begin);
 void print_matrix(double *matrix, size_t n, size_t r);
 void print_matrix_l_x_n(double *matrix, size_t l, size_t n);
 void get_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
@@ -26,6 +41,218 @@ int get_inverse_matrix(double *A, double *B, size_t m);
 void mult(double *a, double *b, double *c, size_t n, size_t m);
 void matrix_multiply(const double *A, const double *B, double *C, size_t p,
                      size_t q, size_t r);
+void zero_matrix(double *matrix, size_t n, size_t m);
+
+
+int find_diff(double *matrix, double *inversed_matrix, char* filename, int n, int m, int s, double &r1, double &r2)
+{
+    if (n < 11000) {
+        double *buf = new double[n * n];
+        if (!buf) {
+            fprintf(stderr, "Can't allocate memory for matrix\n");
+            return 1;
+        }
+        if (s == 0) {
+            if (read_matrix_from_file(buf, n, filename) != 0) {
+                return 2;
+            }
+        } else {
+            if (fill_matrix(buf, n, s) != 0) {
+                return 2;
+            }
+        }
+        mult(buf, inversed_matrix, matrix, n, m);
+        unit_matrix(buf, n);
+        matrix_subtr(buf, inversed_matrix, n, n);
+        r1 = get_norm(buf, n);
+        if (s == 0) {
+            if (read_matrix_from_file(buf, n, filename) != 0) {
+                return 2;
+            }
+        } else {
+            if (fill_matrix(buf, n, s) != 0) {
+                return 2;
+            }
+        }
+        mult(inversed_matrix, buf, matrix, n, m);
+        unit_matrix(buf, n);
+        matrix_subtr(buf, inversed_matrix, n, n);
+        r2 = get_norm(buf, n);
+
+        delete[] buf;
+    } else {
+        r1 = 0;
+        r2 = 0;
+    }
+    return 0;
+}
+
+
+int run(
+        double *matrix,
+        double *inversed_matrix,
+        double *block_A,
+        double *block_B,
+        double *block_C,
+        size_t n,
+        size_t m,
+        size_t k,
+        size_t l,
+        size_t s,
+        char *filename
+    )
+{
+    size_t i, j, column, row, min_norm_ind;
+    double min_norm, norm;
+
+
+    if (s == 0) {
+        if (read_matrix_from_file(matrix, n, filename) != 0) {
+            return 2;
+        }
+    } else {
+        if (fill_matrix(matrix, n, s) != 0) {
+            return 2;
+        }
+    }
+
+
+    unit_matrix(inversed_matrix, n);
+
+    for (column = 0; column < k + 1; column++) {
+        // print_matrix(matrix, n, n);
+        // printf("\n");
+        min_norm = -1;
+        min_norm_ind = column;
+        for (row = column; row < k; row++) {
+            get_block(matrix, block_A, n, m, k, l, column, row);
+            print_matrix(block_A, m, m);
+            printf("\n");
+            if (column != k) {
+                if (get_inverse_matrix(block_A, block_B, m) != 0) {
+                    continue;
+                }
+                print_matrix(block_B, m, m);
+            } else {
+                if (get_inverse_matrix(block_A, block_B, l) != 0) {
+                    continue;
+                }
+                print_matrix(block_B, l, l);
+            }
+
+
+            norm = get_norm(block_B, m);
+            if (min_norm < 0 || norm < min_norm) {
+                min_norm = norm;
+                min_norm_ind = row;
+            }
+        }
+        printf("min_norm: %lf\n", min_norm);
+        if (min_norm < 0) {
+            fprintf(stderr, "Matrix is invertable!\n");
+            return -2;
+        }
+
+        rows_permutation(matrix, block_A, block_B, n, m, k, l, min_norm_ind, column,
+                         column);
+        rows_permutation(inversed_matrix, block_A, block_B, n, m, k, l,
+                         min_norm_ind, column, 0);
+
+        get_block(matrix, block_A, n, m, k, l, column, column);
+        if (column != k) {
+            unit_matrix(block_A, m);
+            if (get_inverse_matrix(block_A, block_B, m) != 0) {
+                fprintf(stderr, "Matrix is invertable!\n");
+                return -1;
+            }
+        } else {
+            unit_matrix(block_A, l);
+            if (get_inverse_matrix(block_A, block_B, l) != 0) {
+                fprintf(stderr, "Matrix is invertable!\n");
+                return -1;
+            }
+        }
+
+        put_block(matrix, block_A, n, m, k, l, column, column);
+
+        for (i = column + 1; i < k + 1; i++) {
+            get_block(matrix, block_A, n, m, k, l, i, column);
+            if (column != k && i != k) {
+                matrix_multiply(block_A, block_B, block_C, m, m, m);
+            } else if (column != k && i == k) {
+                matrix_multiply(block_B, block_A, block_C, m, m, l);
+            }
+            put_block(matrix, block_C, n, m, k, l, i, column);
+        }
+
+        for (i = 0; i < k + 1; i++) {
+            get_block(inversed_matrix, block_A, n, m, k, l, i, column);
+            if (column != k && i != k) {
+                matrix_multiply(block_A, block_B, block_C, m, m, m);
+            } else if (column != k && i == k) {
+                matrix_multiply(block_B, block_A, block_C, m, m, l);
+            } else if (column == k && i != k) {
+                matrix_multiply(block_B, block_A, block_C, l, l, m);
+            } else {
+                matrix_multiply(block_B, block_A, block_C, l, l, l);
+            }
+            put_block(inversed_matrix, block_C, n, m, k, l, i, column);
+        }
+
+        for (i = 0; i < k + 1; i++) {
+            if (i == column)
+                continue;
+            get_block(matrix, block_A, n, m, k, l, i, column);
+            if (column == k) {
+                zero_matrix(block_C, m, l);
+            } else {
+                zero_matrix(block_C, m, m);
+            }
+            put_block(matrix, block_C, n, m, k, l, i, column);
+            for (j = column + 1; j < k + 1; j++) {
+                get_block(matrix, block_C, n, m, k, l, i, j);
+                if (i != k && j != k) {
+                    matrix_multiply(block_C, block_A, block_B, m, m, m);
+                } else if (i != k && j == k) {
+                    matrix_multiply(block_C, block_A, block_B, m, m, l);
+                } else if (i == k && j != k) {
+                    matrix_multiply(block_A, block_C, block_B, l, m, m);
+                } else {
+                    matrix_multiply(block_A, block_C, block_B, l, m, l);
+                }
+                get_block(matrix, block_C, n, m, k, l, column, j);
+                matrix_subtr(block_C, block_B, (i != k ? m : l),
+                             (j != k ? m : l));
+                put_block(matrix, block_C, n, m, k, l, column, j);
+            }
+
+            for (j = 0; j < k + 1; j++) {
+                get_block(inversed_matrix, block_C, n, m, k, l, i, j);
+                if (i != k && j != k) {
+                    matrix_multiply(block_C, block_A, block_B, m, m, m);
+                } else if (i != k && j == k) {
+                    matrix_multiply(block_C, block_A, block_B, m, m, l);
+                } else if (i == k && j != k) {
+                    matrix_multiply(block_A, block_C, block_B, l, m, m);
+                } else {
+                    matrix_multiply(block_A, block_C, block_B, l, m, l);
+                }
+                get_block(inversed_matrix, block_C, n, m, k, l, column, j);
+                matrix_subtr(block_C, block_B, (i != k ? m : l),
+                             (j != k ? m : l));
+                put_block(inversed_matrix, block_C, n, m, k, l, column, j);
+            }
+        }
+    }
+
+    delete[] block_A;
+    delete[] block_B;
+    delete[] block_C;
+    delete[] matrix;
+    delete[] inversed_matrix;
+    return 0;
+}
+
 
 int fill_matrix(double *matrix, size_t n, size_t s)
 {
