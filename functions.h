@@ -124,27 +124,32 @@ int run(
         // printf("\n");
         min_norm = -1;
         min_norm_ind = column;
-        for (row = column; row < k; row++) {
-            get_block(matrix, block_A, n, m, k, l, column, row);
-            print_matrix(block_A, m, m);
-            printf("\n");
-            if (column != k) {
+        if (column < k) {
+            for (row = column; row < k; row++) {
+                get_block(matrix, block_A, n, m, k, l, column, row);
+                print_matrix(block_A, m, m);
+                printf("\n");
                 if (get_inverse_matrix(block_A, block_B, m) != 0) {
                     continue;
                 }
                 print_matrix(block_B, m, m);
-            } else {
-                if (get_inverse_matrix(block_A, block_B, l) != 0) {
-                    continue;
+                printf("\n");
+                norm = get_norm(block_B, m);
+                if (min_norm < 0 || norm < min_norm) {
+                    min_norm = norm;
+                    min_norm_ind = row;
                 }
-                print_matrix(block_B, l, l);
             }
-
-
-            norm = get_norm(block_B, m);
-            if (min_norm < 0 || norm < min_norm) {
+        } else {
+            get_block(matrix, block_A, n, m, k, l, k, k);
+            print_matrix(block_A, l, l);
+            printf("\n");
+            if (get_inverse_matrix(block_A, block_B, l) == 0) {
+                norm = get_norm(block_B, m);
                 min_norm = norm;
-                min_norm_ind = row;
+                min_norm_ind = k;
+                print_matrix(block_B, l, l);
+                printf("\n");
             }
         }
         printf("min_norm: %lf\n", min_norm);
@@ -245,11 +250,6 @@ int run(
         }
     }
 
-    delete[] block_A;
-    delete[] block_B;
-    delete[] block_C;
-    delete[] matrix;
-    delete[] inversed_matrix;
     return 0;
 }
 
