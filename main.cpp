@@ -6,7 +6,6 @@ int main(int argc, char *argv[])
     size_t i, j, k, column, row, min_norm_ind;
     double min_norm, norm, r1 = 0, r2 = 0;
 
-    clock_t t1 = clock();
     if (argc < 5) {
         fprintf(stderr, "Not enough arguments.\n");
         return 1;
@@ -39,32 +38,106 @@ int main(int argc, char *argv[])
     double *block_B = new double[m*m];
     double *block_C = new double[m*m];
 
-    if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix) {
+    clock_t t1 = clock();
+    if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix ||
+        !run(matrix, inversed_matrix, block_A, block_B, block_C, n, m, k, l, s, filename)) {
         if (block_A) delete[] block_A;
         if (block_B) delete[] block_B;
         if (block_C) delete[] block_C;
         if (matrix) delete[] matrix;
         if (inversed_matrix) delete[] inversed_matrix;
-        fprintf(stderr, "Can't allocate memory for matrix\n");
+        if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix) {
+            fprintf(stderr, "Can't allocate memory for matrix\n");
+        }
         return 1;
     }
 
+    print_matrix(inversed_matrix, n, r);
+    t1 -= clock_t();
+
+    clock_t t2 = clock();
+    find_diff(matrix, inversed_matrix, n, m, s, r1, r2);
+    t2 -= clock_t();
+
+
+    printf("%s : Task = %d Res1 = %e Res2 = %e T1 = %.2f T2 = %.2f S = %ld N = "
+           "%ld M = %ld\n",
+           argv[0], 18, r1, r2, double(t1 / CLOCKS_PER_SEC),
+           double(t2 / CLOCKS_PER_SEC), s, n, m);
+
+    delete[] block_A;
+    delete[] block_B;
+    delete[] block_C;
+    delete[] matrix;
+    delete[] inversed_matrix;
+    return 0;
+}
+
+
+int find_diff(double *matrix, double *inversed_matrix, int n, int m, int s, double &r1, double &r2)
+{
+    if (n < 11000) {
+        double *buf = new double[n * n];
+        if (!buf) {
+            fprintf(stderr, "Can't allocate memory for matrix\n");
+            return 1;
+        }
+        if (s == 0) {
+            if (read_matrix_from_file(buf, n, filename) != 0) {
+                return 2;
+            }
+        } else {
+            if (fill_matrix(buf, n, s) != 0) {
+                return 2;
+            }
+        }
+        mult(buf, inversed_matrix, matrix, n, m);
+        unit_matrix(buf, n);
+        matrix_subtr(buf, inversed_matrix, n, n);
+        r1 = get_norm(buf, n);
+        if (s == 0) {
+            if (read_matrix_from_file(buf, n, filename) != 0) {
+                return 2;
+            }
+        } else {
+            if (fill_matrix(buf, n, s) != 0) {
+                return 2;
+            }
+        }
+        mult(inversed_matrix, buf, matrix, n, m);
+        unit_matrix(buf, n);
+        matrix_subtr(buf, inversed_matrix, n, n);
+        r2 = get_norm(buf, n);
+
+        delete[] buf;
+    }
+}
+
+
+int run(double *matrix,
+        double *inversed_matrix,
+        double *block_A,
+        double *block_B,
+        double *block_C,
+        size_t n,
+        size_t m,
+        size_t k,
+        size_t n,
+        size_t n,
+        size_t s,
+        char *filename
+        )
+{
+    size_t i, j, k, column, row, min_norm_ind;
+    double min_norm, norm, r1 = 0, r2 = 0;
+
+
     if (s == 0) {
         if (read_matrix_from_file(matrix, n, filename) != 0) {
-            delete[] block_A;
-            delete[] block_B;
-            delete[] block_C;
-            delete[] matrix;
-            delete[] inversed_matrix;
             return 2;
         }
     } else {
         if (fill_matrix(matrix, n, s) != 0) {
-            delete[] block_A;
-            delete[] block_B;
-            delete[] block_C;
-            delete[] matrix;
-            delete[] inversed_matrix;
             return 2;
         }
     }
@@ -102,11 +175,7 @@ int main(int argc, char *argv[])
         }
         printf("min_norm: %lf\n", min_norm);
         if (min_norm < 0) {
-            delete[] block_A;
-            delete[] block_B;
-            delete[] block_C;
-            delete[] matrix;
-            delete[] inversed_matrix;
+            fprintf(stderr, "Matrix is invertable!\n");
             return -2;
         }
 
@@ -119,21 +188,13 @@ int main(int argc, char *argv[])
         if (column != k) {
             unit_matrix(block_A, m);
             if (get_inverse_matrix(block_A, block_B, m) != 0) {
-                delete[] block_A;
-                delete[] block_B;
-                delete[] block_C;
-                delete[] matrix;
-                delete[] inversed_matrix;
+                fprintf(stderr, "Matrix is invertable!\n");
                 return -1;
             }
         } else {
             unit_matrix(block_A, l);
             if (get_inverse_matrix(block_A, block_B, l) != 0) {
-                delete[] block_A;
-                delete[] block_B;
-                delete[] block_C;
-                delete[] matrix;
-                delete[] inversed_matrix;
+                fprintf(stderr, "Matrix is invertable!\n");
                 return -1;
             }
         }
@@ -217,30 +278,15 @@ int main(int argc, char *argv[])
     if (n < 11000) {
         double *buf = (double *)malloc(n * n * sizeof(double));
         if (!buf) {
-            delete[] block_A;
-            delete[] block_B;
-            delete[] block_C;
-            delete[] matrix;
-            delete[] inversed_matrix;
             fprintf(stderr, "Can't allocate memory for matrix\n");
             return 1;
         }
         if (s == 0) {
             if (read_matrix_from_file(buf, n, filename) != 0) {
-                delete[] block_A;
-                delete[] block_B;
-                delete[] block_C;
-                delete[] matrix;
-                delete[] inversed_matrix;
                 return 2;
             }
         } else {
             if (fill_matrix(buf, n, s) != 0) {
-                delete[] block_A;
-                delete[] block_B;
-                delete[] block_C;
-                delete[] matrix;
-                delete[] inversed_matrix;
                 return 2;
             }
         }
@@ -250,20 +296,10 @@ int main(int argc, char *argv[])
         r1 = get_norm(buf, n);
         if (s == 0) {
             if (read_matrix_from_file(buf, n, filename) != 0) {
-                delete[] block_A;
-                delete[] block_B;
-                delete[] block_C;
-                delete[] matrix;
-                delete[] inversed_matrix;
                 return 2;
             }
         } else {
             if (fill_matrix(buf, n, s) != 0) {
-                delete[] block_A;
-                delete[] block_B;
-                delete[] block_C;
-                delete[] matrix;
-                delete[] inversed_matrix;
                 return 2;
             }
         }
