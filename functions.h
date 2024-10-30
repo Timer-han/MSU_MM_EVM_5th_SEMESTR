@@ -21,7 +21,7 @@ int run(double *matrix,
         size_t l,
         size_t s,
         char *filename);
-int find_diff(double *matrix, double *inversed_matrix, char* filename, int n, int m, int s, double &r1, double &r2);
+int find_diff(double *matrix, double *inversed_matrix, double *block, double *norm, char* filename, int n, int m, int s, double &r1, double &r2);
 int fill_matrix(double *matrix, size_t n, size_t s);
 int read_matrix_from_file(double *matrix, size_t n, const char *filename);
 void unit_matrix(double *matrix, size_t n);
@@ -39,7 +39,7 @@ void matrix_subtr(double *A, double *B, size_t n, size_t m);
 double get_norm(double *matrix, size_t m);
 int get_inverse_matrix(double *A, double *B, size_t m);
 // void mult(double *a, double *b, double *c, size_t n, size_t m);
-double mult_sub_norm(double *a, double *b, double *pc, size_t n, size_t m);
+double mult_sub_norm(double *a, double *b, double *pc, double *norm, size_t n, size_t m);
 void matrix_multiply(const double *A, const double *B, double *C, size_t p,
                      size_t q, size_t r);
 void zero_matrix(double *matrix, size_t n, size_t m);
@@ -112,7 +112,7 @@ void put_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
 }
 
 
-int find_diff(double *matrix, double *inversed_matrix, double* block, char* filename, int n, int m, int s, double &r1, double &r2)
+int find_diff(double *matrix, double *inversed_matrix, double* block, double *norm, char* filename, int n, int m, int s, double &r1, double &r2)
 {
     if (n < 11000) {
         if (s == 0) {
@@ -125,8 +125,8 @@ int find_diff(double *matrix, double *inversed_matrix, double* block, char* file
             }
         }
 
-        r1 = mult_sub_norm(matrix, inversed_matrix, block, n, m);
-        r2 = mult_sub_norm(inversed_matrix, matrix, block, n, m);
+        r1 = mult_sub_norm(matrix, inversed_matrix, block, norm, n, m);
+        r2 = mult_sub_norm(inversed_matrix, matrix, block, norm, n, m);
 
     } else {
         r1 = 0;
@@ -530,7 +530,7 @@ int get_inverse_matrix(double *A, double *B, size_t m)
     return 0;
 }
 
-double mult_sub_norm(double *a, double *b, double *pc, size_t n, size_t m)
+double mult_sub_norm(double *a, double *b, double *pc, double *norm, size_t n, size_t m)
 {
     size_t i, j, s, r, t, q;
     size_t k = n / m;
@@ -538,6 +538,8 @@ double mult_sub_norm(double *a, double *b, double *pc, size_t n, size_t m)
     size_t bl = (l != 0 ? k + 1 : k); // Общее количество блоков
     size_t v, h, ah;
     double max_norm = 0;
+
+    for (i = 0; i < n; i++) norm[i] = 0;
 
     // Проходим по всем блокам в матрице C
     for (i = 0; i < bl; i++) {
@@ -696,14 +698,17 @@ double mult_sub_norm(double *a, double *b, double *pc, size_t n, size_t m)
             for (r = 0; r < v; r++) {
                 for (t = 0; t < h; t++) {
                     if (i == j && r == t) {
-                        max_norm = MAX(std::abs(1 - pc[r * h + t]), max_norm);
+                        norm[t + m * j] += std::abs(1 - pc[r * h + t]);
                     } else {
-                        max_norm = MAX(std::abs(pc[r * h + t]), max_norm);
+                        norm[t + m * j] += std::abs(pc[r * h + t]);
                     }
                 }
             }
         }
     }
+
+    for (i = 0; i < n; i++) max_norm = MAX(max_norm, norm[i]);
+
     return max_norm;
 }
 

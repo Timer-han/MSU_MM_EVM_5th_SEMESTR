@@ -31,15 +31,18 @@ int main(int argc, char *argv[])
     double *block_A = new double[m*m];
     double *block_B = new double[m*m];
     double *block_C = new double[m*m];
+    double *norm = new double[n];
+
 
     clock_t t1 = clock();
-    if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix ||
+    if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix || !norm ||
         (z = run(matrix, inversed_matrix, block_A, block_B, block_C, n, m, k, l, s, filename))) {
         if (block_A) delete[] block_A;
         if (block_B) delete[] block_B;
         if (block_C) delete[] block_C;
         if (matrix) delete[] matrix;
         if (inversed_matrix) delete[] inversed_matrix;
+        if (norm) delete[] norm;
         if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix) {
             fprintf(stderr, "Can't allocate memory for matrix\n");
         }
@@ -49,7 +52,7 @@ int main(int argc, char *argv[])
     t1 -= clock_t();
 
     clock_t t2 = clock();
-    if ((z = find_diff(matrix, inversed_matrix, block_A, filename, n, m, s, r1, r2)) != 0) {
+    if ((z = find_diff(matrix, inversed_matrix, block_A, norm, filename, n, m, s, r1, r2)) != 0) {
         return z;
     } else {
         t2 -= clock_t();
@@ -67,5 +70,6 @@ int main(int argc, char *argv[])
     delete[] block_C;
     delete[] matrix;
     delete[] inversed_matrix;
+    delete[] norm;
     return 0;
 }
