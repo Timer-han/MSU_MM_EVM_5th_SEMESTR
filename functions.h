@@ -38,48 +38,96 @@ void matrix_sum(double *A, double *B, double *C, size_t n, size_t m);
 void matrix_subtr(double *A, double *B, size_t n, size_t m);
 double get_norm(double *matrix, size_t m);
 int get_inverse_matrix(double *A, double *B, size_t m);
-void mult(double *a, double *b, double *c, size_t n, size_t m);
+// void mult(double *a, double *b, double *c, size_t n, size_t m);
+double mult_sub_norm(double *a, double *b, double *pc, size_t n, size_t m);
 void matrix_multiply(const double *A, const double *B, double *C, size_t p,
                      size_t q, size_t r);
 void zero_matrix(double *matrix, size_t n, size_t m);
 
 
-int find_diff(double *matrix, double *inversed_matrix, char* filename, int n, int m, int s, double &r1, double &r2)
+void get_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
+               size_t i, size_t j)
+{
+    size_t row_count, col_count;
+    size_t row_offset, col_offset;
+    size_t block_row, block_col;
+
+    // Определяем размеры блока
+    if (i < k)
+        row_count = m;
+    else
+        row_count = l;
+
+    if (j < k)
+        col_count = m;
+    else
+        col_count = l;
+
+    // Вычисляем смещение в исходной матрице
+    row_offset = (i < k) ? i * m : k * m + (i - k) * l;
+    col_offset = (j < k) ? j * m : k * m + (j - k) * l;
+
+    // Копируем элементы блока
+    for (block_row = 0; block_row < row_count; block_row++)
+    {
+        for (block_col = 0; block_col < col_count; block_col++)
+        {
+            block[block_row * col_count + block_col] =
+                a[(row_offset + block_row) * n + (col_offset + block_col)];
+        }
+    }
+}
+
+void put_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
+               size_t i, size_t j)
+{
+    size_t row_size, col_size;
+    size_t row_offset, col_offset;
+    size_t block_row, block_col;
+
+    // Определяем размеры блока
+    if (i < k)
+        row_size = m;
+    else
+        row_size = l;
+
+    if (j < k)
+        col_size = m;
+    else
+        col_size = l;
+
+    // Вычисляем смещение в матрице
+    row_offset = (i < k) ? i * m : k * m + (i - k) * l;
+    col_offset = (j < k) ? j * m : k * m + (j - k) * l;
+
+    // Копируем элементы из блока обратно в матрицу
+    for (block_row = 0; block_row < row_size; block_row++)
+    {
+        for (block_col = 0; block_col < col_size; block_col++)
+        {
+            a[(row_offset + block_row) * n + (col_offset + block_col)] =
+                block[block_row * col_size + block_col];
+        }
+    }
+}
+
+
+int find_diff(double *matrix, double *inversed_matrix, double* block, char* filename, int n, int m, int s, double &r1, double &r2)
 {
     if (n < 11000) {
-        double *buf = new double[n * n];
-        if (!buf) {
-            fprintf(stderr, "Can't allocate memory for matrix\n");
-            return 1;
-        }
         if (s == 0) {
-            if (read_matrix_from_file(buf, n, filename) != 0) {
+            if (read_matrix_from_file(matrix, n, filename) != 0) {
                 return 2;
             }
         } else {
-            if (fill_matrix(buf, n, s) != 0) {
+            if (fill_matrix(matrix, n, s) != 0) {
                 return 2;
             }
         }
-        mult(buf, inversed_matrix, matrix, n, m);
-        unit_matrix(buf, n);
-        matrix_subtr(buf, inversed_matrix, n, n);
-        r1 = get_norm(buf, n);
-        if (s == 0) {
-            if (read_matrix_from_file(buf, n, filename) != 0) {
-                return 2;
-            }
-        } else {
-            if (fill_matrix(buf, n, s) != 0) {
-                return 2;
-            }
-        }
-        mult(inversed_matrix, buf, matrix, n, m);
-        unit_matrix(buf, n);
-        matrix_subtr(buf, inversed_matrix, n, n);
-        r2 = get_norm(buf, n);
 
-        delete[] buf;
+        r1 = mult_sub_norm(matrix, inversed_matrix, block, n, m);
+        r2 = mult_sub_norm(inversed_matrix, matrix, block, n, m);
+
     } else {
         r1 = 0;
         r2 = 0;
@@ -103,6 +151,7 @@ int run(
     )
 {
     size_t i, j, column, row, min_norm_ind;
+    size_t bl = (l == 0) ? k : k + 1;
     double min_norm, norm;
 
 
@@ -118,22 +167,23 @@ int run(
 
 
     unit_matrix(inversed_matrix, n);
-
-    for (column = 0; column < k + 1; column++) {
+    // Пробегаюсь по диагональным элементам
+    for (column = 0; column < bl; column++) {
         // print_matrix(matrix, n, n);
         // printf("\n");
         min_norm = -1;
         min_norm_ind = column;
+        // Ищу в столбце матрицу у кооторой обратная имеет наименьшую норму
         if (column < k) {
             for (row = column; row < k; row++) {
                 get_block(matrix, block_A, n, m, k, l, column, row);
-                print_matrix(block_A, m, m);
-                printf("\n");
+                // print_matrix(block_A, m, m);
+                // printf("\n");
                 if (get_inverse_matrix(block_A, block_B, m) != 0) {
                     continue;
                 }
-                print_matrix(block_B, m, m);
-                printf("\n");
+                // print_matrix(block_B, m, m);
+                // printf("\n");
                 norm = get_norm(block_B, m);
                 if (min_norm < 0 || norm < min_norm) {
                     min_norm = norm;
@@ -142,58 +192,63 @@ int run(
             }
         } else {
             get_block(matrix, block_A, n, m, k, l, k, k);
-            print_matrix(block_A, l, l);
-            printf("\n");
+            // print_matrix(block_A, l, l);
+            // printf("\n");
             if (get_inverse_matrix(block_A, block_B, l) == 0) {
-                norm = get_norm(block_B, m);
+                norm = get_norm(block_B, l);
                 min_norm = norm;
                 min_norm_ind = k;
-                print_matrix(block_B, l, l);
-                printf("\n");
+                // print_matrix(block_B, l, l);
+                // printf("\n");
             }
         }
-        printf("min_norm: %lf\n", min_norm);
+        // printf("min_norm: %lf\n", min_norm);
         if (min_norm < 0) {
             fprintf(stderr, "Matrix is invertable!\n");
             return -2;
         }
 
+        // Переставляю строки так, чтобы на текущем диагональном элементе была
+        // матрица с наименьшей нормой её обратной
         rows_permutation(matrix, block_A, block_B, n, m, k, l, min_norm_ind, column,
                          column);
         rows_permutation(inversed_matrix, block_A, block_B, n, m, k, l,
                          min_norm_ind, column, 0);
 
+        
+        // Нахожу обратную
         get_block(matrix, block_A, n, m, k, l, column, column);
         if (column != k) {
-            unit_matrix(block_A, m);
             if (get_inverse_matrix(block_A, block_B, m) != 0) {
                 fprintf(stderr, "Matrix is invertable!\n");
                 return -1;
             }
         } else {
-            unit_matrix(block_A, l);
             if (get_inverse_matrix(block_A, block_B, l) != 0) {
                 fprintf(stderr, "Matrix is invertable!\n");
                 return -1;
             }
         }
 
+        // Вставляю единичную  на место текущего диагонального элемента
         put_block(matrix, block_A, n, m, k, l, column, column);
 
-        for (i = column + 1; i < k + 1; i++) {
-            get_block(matrix, block_A, n, m, k, l, i, column);
-            if (column != k && i != k) {
-                matrix_multiply(block_A, block_B, block_C, m, m, m);
-            } else if (column != k && i == k) {
+        // Начиная со следующего каждый элемент в строке домножаю на обратную к диагональному
+        for (i = column + 1; i < bl; i++) {
+            get_block(matrix, block_A, n, m, k, l, column, i);
+            if (i != k) {
+                matrix_multiply(block_B, block_A, block_C, m, m, m);
+            } else if (i == k) {
                 matrix_multiply(block_B, block_A, block_C, m, m, l);
             }
-            put_block(matrix, block_C, n, m, k, l, i, column);
+            put_block(matrix, block_C, n, m, k, l, column, i);
         }
 
-        for (i = 0; i < k + 1; i++) {
-            get_block(inversed_matrix, block_A, n, m, k, l, i, column);
+        // Каждый элемент той же строки матрицы В домножаю на эту же обратную
+        for (i = 0; i < bl; i++) {
+            get_block(inversed_matrix, block_A, n, m, k, l, column, i);
             if (column != k && i != k) {
-                matrix_multiply(block_A, block_B, block_C, m, m, m);
+                matrix_multiply(block_B, block_A, block_C, m, m, m);
             } else if (column != k && i == k) {
                 matrix_multiply(block_B, block_A, block_C, m, m, l);
             } else if (column == k && i != k) {
@@ -201,51 +256,70 @@ int run(
             } else {
                 matrix_multiply(block_B, block_A, block_C, l, l, l);
             }
-            put_block(inversed_matrix, block_C, n, m, k, l, i, column);
+            put_block(inversed_matrix, block_C, n, m, k, l, column, i);
         }
 
-        for (i = 0; i < k + 1; i++) {
+        // Для каждой строки, кроме той, на которой есть текущий диагональный
+        for (i = 0; i < bl; i++) {
             if (i == column)
                 continue;
+
+            // Делаем блок нулей и запоминаем блок диагонального столбца и текущей строки
             get_block(matrix, block_A, n, m, k, l, i, column);
-            if (column == k) {
-                zero_matrix(block_C, m, l);
-            } else {
+            if (i != k && column != k) {
                 zero_matrix(block_C, m, m);
-            }
-            put_block(matrix, block_C, n, m, k, l, i, column);
-            for (j = column + 1; j < k + 1; j++) {
-                get_block(matrix, block_C, n, m, k, l, i, j);
-                if (i != k && j != k) {
-                    matrix_multiply(block_C, block_A, block_B, m, m, m);
-                } else if (i != k && j == k) {
-                    matrix_multiply(block_C, block_A, block_B, m, m, l);
-                } else if (i == k && j != k) {
-                    matrix_multiply(block_A, block_C, block_B, l, m, m);
-                } else {
-                    matrix_multiply(block_A, block_C, block_B, l, m, l);
-                }
-                get_block(matrix, block_C, n, m, k, l, column, j);
-                matrix_subtr(block_C, block_B, (i != k ? m : l),
-                             (j != k ? m : l));
-                put_block(matrix, block_C, n, m, k, l, column, j);
+            } else if (i != k && column == k) {
+                zero_matrix(block_C, m, l);
+            } else if (i == k && column != k) {
+                zero_matrix(block_C, l, m);
             }
 
-            for (j = 0; j < k + 1; j++) {
-                get_block(inversed_matrix, block_C, n, m, k, l, i, j);
+            // Обнуляем первый элемент строки
+            put_block(matrix, block_C, n, m, k, l, i, column);
+
+            // Для каждого следующего элемента текущей строки, вычитаем из него А х С
+            for (j = column + 1; j < bl; j++) {
+                get_block(matrix, block_C, n, m, k, l, column, j);
                 if (i != k && j != k) {
-                    matrix_multiply(block_C, block_A, block_B, m, m, m);
+                    matrix_multiply(block_A, block_C, block_B, m, m, m);
                 } else if (i != k && j == k) {
-                    matrix_multiply(block_C, block_A, block_B, m, m, l);
+                    matrix_multiply(block_A, block_C, block_B, m, m, l);
                 } else if (i == k && j != k) {
                     matrix_multiply(block_A, block_C, block_B, l, m, m);
                 } else {
                     matrix_multiply(block_A, block_C, block_B, l, m, l);
                 }
-                get_block(inversed_matrix, block_C, n, m, k, l, column, j);
-                matrix_subtr(block_C, block_B, (i != k ? m : l),
+                get_block(matrix, block_C, n, m, k, l, i, j);
+                matrix_subtr(block_C, block_B, (column != k ? m : l),
                              (j != k ? m : l));
-                put_block(inversed_matrix, block_C, n, m, k, l, column, j);
+                put_block(matrix, block_C, n, m, k, l, i, j);
+            }
+
+            // Аналогично для матрицы В
+            for (j = 0; j < bl; j++) {
+                get_block(inversed_matrix, block_C, n, m, k, l, column, j);
+                if (column != k) {
+                    if (i != k && j != k) {
+                        matrix_multiply(block_A, block_C, block_B, m, m, m);
+                    } else if (i != k && j == k) {
+                        matrix_multiply(block_A, block_C, block_B, m, m, l);
+                    } else if (i == k && j != k) {
+                        matrix_multiply(block_A, block_C, block_B, l, m, m);
+                    } else if (i == k && j == k)  {
+                        matrix_multiply(block_A, block_C, block_B, l, m, l);
+                    }
+                } else {
+                    if (j == k)  {
+                        matrix_multiply(block_C, block_A, block_B, l, l, m);
+                    } else {
+                        matrix_multiply(block_A, block_C, block_B, l, m, l);
+                    } 
+                }
+            
+                get_block(inversed_matrix, block_C, n, m, k, l, i, j);
+                matrix_subtr(block_C, block_B, (column != k ? m : l),
+                             (j != k ? m : l));
+                put_block(inversed_matrix, block_C, n, m, k, l, i, j);
             }
         }
     }
@@ -324,28 +398,29 @@ void zero_matrix(double *matrix, size_t n, size_t m)
 }
 
 void matrix_multiply(const double *A, const double *B, double *C, size_t p,
-                     size_t q, size_t r)
-{
+                     size_t q, size_t r) {
     size_t i, j, k;
-    double temp;
-
-    for (i = 0; i < p * r; ++i) {
-        C[i] = 0.0;
+    for (i = 0; i < p; ++i) {
+        for (k = 0; k < r; ++k) {
+            C[i * r + k] = 0.0;
+        }
     }
 
-    for (i = 0; i < p; ++i) {
-        for (k = 0; k < q; ++k) {
-            temp = A[i * q + k];
 
-            for (j = 0; j + 4 <= r; j += 4) {
-                C[i * r + j] += temp * B[k * r + j];
-                C[i * r + j + 1] += temp * B[k * r + j + 1];
-                C[i * r + j + 2] += temp * B[k * r + j + 2];
-                C[i * r + j + 3] += temp * B[k * r + j + 3];
+    for (i = 0; i < p; ++i) {
+        for (j = 0; j < q; ++j) {
+
+            double a_ij = A[i * q + j];
+            k = 0;
+            for (; k + 3 < r; k += 4) {
+                C[i * r + k]     += a_ij * B[j * r + k];
+                C[i * r + k + 1] += a_ij * B[j * r + k + 1];
+                C[i * r + k + 2] += a_ij * B[j * r + k + 2];
+                C[i * r + k + 3] += a_ij * B[j * r + k + 3];
             }
 
-            for (; j < r; ++j) {
-                C[i * r + j] += temp * B[k * r + j];
+            for (; k < r; ++k) {
+                C[i * r + k] += a_ij * B[j * r + k];
             }
         }
     }
@@ -413,7 +488,7 @@ int get_inverse_matrix(double *A, double *B, size_t m)
                 max_ind = i;
             }
         }
-        printf("max: %lf, max_ind: %ld\n", max, max_ind);
+        // printf("max: %lf, max_ind: %ld\n", max, max_ind);
 
         if (max <= EPS) {
             return -1;
@@ -455,13 +530,14 @@ int get_inverse_matrix(double *A, double *B, size_t m)
     return 0;
 }
 
-void mult(double *a, double *b, double *c, size_t n, size_t m)
+double mult_sub_norm(double *a, double *b, double *pc, size_t n, size_t m)
 {
     size_t i, j, s, r, t, q;
     size_t k = n / m;
     size_t l = n - k * m; // n = k * m + l
     size_t bl = (l != 0 ? k + 1 : k); // Общее количество блоков
     size_t v, h, ah;
+    double max_norm = 0;
 
     // Проходим по всем блокам в матрице C
     for (i = 0; i < bl; i++) {
@@ -471,12 +547,12 @@ void mult(double *a, double *b, double *c, size_t n, size_t m)
             h = (j < k ? m : l); // горизонтальный размер блока
 
             // Указатель на начало текущего блока C
-            double *pc = c + (i * m) * n + j * m;
+            // double *pc = c + (i * m) * n + j * m;
 
             // Инициализируем блок C нулями
             for (r = 0; r < v; r++) {
                 for (t = 0; t < h; t++) {
-                    pc[r * n + t] = 0.0;
+                    pc[r * h + t] = 0.0;
                 }
             }
 
@@ -521,17 +597,35 @@ void mult(double *a, double *b, double *c, size_t n, size_t m)
                             s22 += a2q * bq2;
                         }
 
-                        pc[(r + 0) * n + (t + 0)] += s00;
-                        pc[(r + 0) * n + (t + 1)] += s01;
-                        pc[(r + 0) * n + (t + 2)] += s02;
+                        pc[(r + 0) * h + (t + 0)] += s00;
+                        pc[(r + 0) * h + (t + 1)] += s01;
+                        pc[(r + 0) * h + (t + 2)] += s02;
 
-                        pc[(r + 1) * n + (t + 0)] += s10;
-                        pc[(r + 1) * n + (t + 1)] += s11;
-                        pc[(r + 1) * n + (t + 2)] += s12;
+                        pc[(r + 1) * h + (t + 0)] += s10;
+                        pc[(r + 1) * h + (t + 1)] += s11;
+                        pc[(r + 1) * h + (t + 2)] += s12;
 
-                        pc[(r + 2) * n + (t + 0)] += s20;
-                        pc[(r + 2) * n + (t + 1)] += s21;
-                        pc[(r + 2) * n + (t + 2)] += s22;
+                        pc[(r + 2) * h + (t + 0)] += s20;
+                        pc[(r + 2) * h + (t + 1)] += s21;
+                        pc[(r + 2) * h + (t + 2)] += s22;
+
+                        // if (r == t && i == j) {
+                        //     max_norm = MAX(std::abs(1. - s00), max_norm);
+                        //     max_norm = MAX(std::abs(1. - s11), max_norm);
+                        //     max_norm = MAX(std::abs(1. - s22), max_norm);
+                        // } else {
+                        //     max_norm = MAX(std::abs(s00), max_norm);
+                        //     max_norm = MAX(std::abs(s11), max_norm);
+                        //     max_norm = MAX(std::abs(s22), max_norm);
+                        // }
+
+                        // max_norm = MAX(std::abs(s01), max_norm);
+                        // max_norm = MAX(std::abs(s02), max_norm);
+                        // max_norm = MAX(std::abs(s10), max_norm);
+                        // max_norm = MAX(std::abs(s12), max_norm);
+                        // max_norm = MAX(std::abs(s20), max_norm);
+                        // max_norm = MAX(std::abs(s21), max_norm);
+
                     }
 
                     // Обработка оставшихся столбцов в блоке
@@ -549,9 +643,13 @@ void mult(double *a, double *b, double *c, size_t n, size_t m)
                             s2 += a2q * bqt;
                         }
 
-                        pc[(r + 0) * n + t] += s0;
-                        pc[(r + 1) * n + t] += s1;
-                        pc[(r + 2) * n + t] += s2;
+                        pc[(r + 0) * h + t] += s0;
+                        pc[(r + 1) * h + t] += s1;
+                        pc[(r + 2) * h + t] += s2;
+                        // max_norm = MAX(std::abs(s0), max_norm);
+                        // max_norm = MAX(std::abs(s1), max_norm);
+                        // max_norm = MAX(std::abs(s2), max_norm);
+                        
                     }
                 }
 
@@ -571,9 +669,14 @@ void mult(double *a, double *b, double *c, size_t n, size_t m)
                             s2 += a0q * bq2;
                         }
 
-                        pc[r * n + (t + 0)] += s0;
-                        pc[r * n + (t + 1)] += s1;
-                        pc[r * n + (t + 2)] += s2;
+                        pc[r * h + (t + 0)] += s0;
+                        pc[r * h + (t + 1)] += s1;
+                        pc[r * h + (t + 2)] += s2;
+
+                        // max_norm = MAX(std::abs(s0), max_norm);
+                        // max_norm = MAX(std::abs(s1), max_norm);
+                        // max_norm = MAX(std::abs(s2), max_norm);
+
                     }
 
                     // Обработка оставшихся элементов
@@ -584,12 +687,24 @@ void mult(double *a, double *b, double *c, size_t n, size_t m)
                             sum += pa[r * n + q] * pb[q * n + t];
                         }
 
-                        pc[r * n + t] += sum;
+                        pc[r * h + t] += sum;
+                        // if (r == t && i == j) max_norm = MAX(std::abs(1 - sum), max_norm);
+                        // else max_norm = MAX(std::abs(sum), max_norm);
+                    }
+                }
+            }
+            for (r = 0; r < v; r++) {
+                for (t = 0; t < h; t++) {
+                    if (i == j && r == t) {
+                        max_norm = MAX(std::abs(1 - pc[r * h + t]), max_norm);
+                    } else {
+                        max_norm = MAX(std::abs(pc[r * h + t]), max_norm);
                     }
                 }
             }
         }
     }
+    return max_norm;
 }
 
 void print_matrix(double *matrix, size_t n, size_t r)
@@ -611,99 +726,5 @@ void print_matrix_l_x_n(double *matrix, size_t l, size_t n)
             printf(" %10.3e", matrix[i * n + j]);
         }
         printf("\n");
-    }
-}
-
-void get_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
-               size_t i, size_t j)
-{
-    size_t block_index = 0;
-    size_t count_skip_elements = 0;
-    double *block_beginning = nullptr;
-    if (i < k) {
-        block_beginning = a + m * (m * k * i + i * l + m * j);
-        if (j < k) {
-            for (block_index = 0; block_index < m * m; block_index++) {
-                block[block_index] =
-                    block_beginning[block_index + count_skip_elements];
-                if ((block_index + 1) % m == 0) {
-                    count_skip_elements += n - m;
-                }
-            }
-        } else {
-            for (block_index = 0; block_index < m * l; block_index++) {
-                block[block_index] =
-                    block_beginning[block_index + count_skip_elements];
-                if ((block_index + 1) % l == 0) {
-                    count_skip_elements += n - l;
-                }
-            }
-        }
-    } else {
-        block_beginning = a + m * (m * k * k + l * k + l * j);
-        if (j < k) {
-            for (block_index = 0; block_index < m * l; block_index++) {
-                block[block_index] =
-                    block_beginning[block_index + count_skip_elements];
-                if ((block_index + 1) % m == 0) {
-                    count_skip_elements += n - m;
-                }
-            }
-        } else {
-            for (block_index = 0; block_index < l * l; block_index++) {
-                block[block_index] =
-                    block_beginning[block_index + count_skip_elements];
-                if ((block_index + 1) % l == 0) {
-                    count_skip_elements += n - l;
-                }
-            }
-        }
-    }
-}
-
-void put_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
-               size_t i, size_t j)
-{
-    size_t block_index = 0;
-    size_t count_skip_elements = 0;
-    double *block_beginning = nullptr;
-    if (i < k) {
-        block_beginning = a + m * (m * k * i + i * l + m * j);
-        if (j < k) {
-            for (block_index = 0; block_index < m * m; block_index++) {
-                block_beginning[block_index + count_skip_elements] =
-                    block[block_index];
-                if ((block_index + 1) % m == 0) {
-                    count_skip_elements += n - m;
-                }
-            }
-        } else {
-            for (block_index = 0; block_index < m * l; block_index++) {
-                block_beginning[block_index + count_skip_elements] =
-                    block[block_index];
-                if ((block_index + 1) % l == 0) {
-                    count_skip_elements += n - l;
-                }
-            }
-        }
-    } else {
-        block_beginning = a + m * (m * k * k + l * k + l * j);
-        if (j < k) {
-            for (block_index = 0; block_index < m * l; block_index++) {
-                block_beginning[block_index + count_skip_elements] =
-                    block[block_index];
-                if ((block_index + 1) % l == 0) {
-                    count_skip_elements += n - l;
-                }
-            }
-        } else {
-            for (block_index = 0; block_index < l * l; block_index++) {
-                block_beginning[block_index + count_skip_elements] =
-                    block[block_index];
-                if ((block_index + 1) % l == 0) {
-                    count_skip_elements += n - l;
-                }
-            }
-        }
     }
 }
