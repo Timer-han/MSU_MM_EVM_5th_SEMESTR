@@ -64,8 +64,8 @@ void get_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
         col_count = l;
 
     // Вычисляем смещение в исходной матрице
-    row_offset = (i < k) ? i * m : k * m + (i - k) * l;
-    col_offset = (j < k) ? j * m : k * m + (j - k) * l;
+    row_offset = i * m;
+    col_offset = j * m;
 
     // Копируем элементы блока
     for (block_row = 0; block_row < row_count; block_row++)
@@ -97,8 +97,8 @@ void put_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
         col_size = l;
 
     // Вычисляем смещение в матрице
-    row_offset = (i < k) ? i * m : k * m + (i - k) * l;
-    col_offset = (j < k) ? j * m : k * m + (j - k) * l;
+    row_offset = i * m;
+    col_offset = j * m;
 
     // Копируем элементы из блока обратно в матрицу
     for (block_row = 0; block_row < row_size; block_row++)
@@ -132,198 +132,6 @@ int find_diff(double *matrix, double *inversed_matrix, double* block, double *no
         r1 = 0;
         r2 = 0;
     }
-    return 0;
-}
-
-
-int run(
-        double *matrix,
-        double *inversed_matrix,
-        double *block_A,
-        double *block_B,
-        double *block_C,
-        size_t n,
-        size_t m,
-        size_t k,
-        size_t l,
-        size_t s,
-        char *filename
-    )
-{
-    size_t i, j, column, row, min_norm_ind;
-    size_t bl = (l == 0) ? k : k + 1;
-    double min_norm, norm;
-
-
-    if (s == 0) {
-        if (read_matrix_from_file(matrix, n, filename) != 0) {
-            return 2;
-        }
-    } else {
-        if (fill_matrix(matrix, n, s) != 0) {
-            return 2;
-        }
-    }
-
-
-    unit_matrix(inversed_matrix, n);
-    // Пробегаюсь по диагональным элементам
-    for (column = 0; column < bl; column++) {
-        // print_matrix(matrix, n, n);
-        // printf("\n");
-        min_norm = -1;
-        min_norm_ind = column;
-        // Ищу в столбце матрицу у кооторой обратная имеет наименьшую норму
-        if (column < k) {
-            for (row = column; row < k; row++) {
-                get_block(matrix, block_A, n, m, k, l, column, row);
-                // print_matrix(block_A, m, m);
-                // printf("\n");
-                if (get_inverse_matrix(block_A, block_B, m) != 0) {
-                    continue;
-                }
-                // print_matrix(block_B, m, m);
-                // printf("\n");
-                norm = get_norm(block_B, m);
-                if (min_norm < 0 || norm < min_norm) {
-                    min_norm = norm;
-                    min_norm_ind = row;
-                }
-            }
-        } else {
-            get_block(matrix, block_A, n, m, k, l, k, k);
-            // print_matrix(block_A, l, l);
-            // printf("\n");
-            if (get_inverse_matrix(block_A, block_B, l) == 0) {
-                norm = get_norm(block_B, l);
-                min_norm = norm;
-                min_norm_ind = k;
-                // print_matrix(block_B, l, l);
-                // printf("\n");
-            }
-        }
-        // printf("min_norm: %lf\n", min_norm);
-        if (min_norm < 0) {
-            fprintf(stderr, "Matrix is invertable!\n");
-            return -2;
-        }
-
-        // Переставляю строки так, чтобы на текущем диагональном элементе была
-        // матрица с наименьшей нормой её обратной
-        rows_permutation(matrix, block_A, block_B, n, m, k, l, min_norm_ind, column,
-                         column);
-        rows_permutation(inversed_matrix, block_A, block_B, n, m, k, l,
-                         min_norm_ind, column, 0);
-
-        
-        // Нахожу обратную
-        get_block(matrix, block_A, n, m, k, l, column, column);
-        if (column != k) {
-            if (get_inverse_matrix(block_A, block_B, m) != 0) {
-                fprintf(stderr, "Matrix is invertable!\n");
-                return -1;
-            }
-        } else {
-            if (get_inverse_matrix(block_A, block_B, l) != 0) {
-                fprintf(stderr, "Matrix is invertable!\n");
-                return -1;
-            }
-        }
-
-        // Вставляю единичную  на место текущего диагонального элемента
-        put_block(matrix, block_A, n, m, k, l, column, column);
-
-        // Начиная со следующего каждый элемент в строке домножаю на обратную к диагональному
-        for (i = column + 1; i < bl; i++) {
-            get_block(matrix, block_A, n, m, k, l, column, i);
-            if (i != k) {
-                matrix_multiply(block_B, block_A, block_C, m, m, m);
-            } else if (i == k) {
-                matrix_multiply(block_B, block_A, block_C, m, m, l);
-            }
-            put_block(matrix, block_C, n, m, k, l, column, i);
-        }
-
-        // Каждый элемент той же строки матрицы В домножаю на эту же обратную
-        for (i = 0; i < bl; i++) {
-            get_block(inversed_matrix, block_A, n, m, k, l, column, i);
-            if (column != k && i != k) {
-                matrix_multiply(block_B, block_A, block_C, m, m, m);
-            } else if (column != k && i == k) {
-                matrix_multiply(block_B, block_A, block_C, m, m, l);
-            } else if (column == k && i != k) {
-                matrix_multiply(block_B, block_A, block_C, l, l, m);
-            } else {
-                matrix_multiply(block_B, block_A, block_C, l, l, l);
-            }
-            put_block(inversed_matrix, block_C, n, m, k, l, column, i);
-        }
-
-        // Для каждой строки, кроме той, на которой есть текущий диагональный
-        for (i = 0; i < bl; i++) {
-            if (i == column)
-                continue;
-
-            // Делаем блок нулей и запоминаем блок диагонального столбца и текущей строки
-            get_block(matrix, block_A, n, m, k, l, i, column);
-            if (i != k && column != k) {
-                zero_matrix(block_C, m, m);
-            } else if (i != k && column == k) {
-                zero_matrix(block_C, m, l);
-            } else if (i == k && column != k) {
-                zero_matrix(block_C, l, m);
-            }
-
-            // Обнуляем первый элемент строки
-            put_block(matrix, block_C, n, m, k, l, i, column);
-
-            // Для каждого следующего элемента текущей строки, вычитаем из него А х С
-            for (j = column + 1; j < bl; j++) {
-                get_block(matrix, block_C, n, m, k, l, column, j);
-                if (i != k && j != k) {
-                    matrix_multiply(block_A, block_C, block_B, m, m, m);
-                } else if (i != k && j == k) {
-                    matrix_multiply(block_A, block_C, block_B, m, m, l);
-                } else if (i == k && j != k) {
-                    matrix_multiply(block_A, block_C, block_B, l, m, m);
-                } else {
-                    matrix_multiply(block_A, block_C, block_B, l, m, l);
-                }
-                get_block(matrix, block_C, n, m, k, l, i, j);
-                matrix_subtr(block_C, block_B, (column != k ? m : l),
-                             (j != k ? m : l));
-                put_block(matrix, block_C, n, m, k, l, i, j);
-            }
-
-            // Аналогично для матрицы В
-            for (j = 0; j < bl; j++) {
-                get_block(inversed_matrix, block_C, n, m, k, l, column, j);
-                if (column != k) {
-                    if (i != k && j != k) {
-                        matrix_multiply(block_A, block_C, block_B, m, m, m);
-                    } else if (i != k && j == k) {
-                        matrix_multiply(block_A, block_C, block_B, m, m, l);
-                    } else if (i == k && j != k) {
-                        matrix_multiply(block_A, block_C, block_B, l, m, m);
-                    } else if (i == k && j == k)  {
-                        matrix_multiply(block_A, block_C, block_B, l, m, l);
-                    }
-                } else {
-                    if (j == k)  {
-                        matrix_multiply(block_C, block_A, block_B, l, l, m);
-                    } else {
-                        matrix_multiply(block_A, block_C, block_B, l, m, l);
-                    } 
-                }
-            
-                get_block(inversed_matrix, block_C, n, m, k, l, i, j);
-                matrix_subtr(block_C, block_B, (column != k ? m : l),
-                             (j != k ? m : l));
-                put_block(inversed_matrix, block_C, n, m, k, l, i, j);
-            }
-        }
-    }
-
     return 0;
 }
 
@@ -381,20 +189,20 @@ int read_matrix_from_file(double *matrix, size_t n, const char *filename)
 
 void unit_matrix(double *matrix, size_t n)
 {
+    memset(matrix, 0, n * sizeof(double));
     for (size_t i = 0; i < n; i++) {
-        for (size_t j = 0; j < n; j++) {
-            matrix[i * n + j] = (i == j ? 1 : 0);
-        }
+        matrix[i * n + i] = 1;
     }
 }
 
 void zero_matrix(double *matrix, size_t n, size_t m)
 {
-    for (size_t i = 0; i < n; i++) {
-        for (size_t j = 0; j < m; j++) {
-            matrix[i * n + j] = 0;
-        }
-    }
+    memset(matrix, 0, n * m * sizeof(double));
+    // for (size_t i = 0; i < n; i++) {
+    //     for (size_t j = 0; j < m; j++) {
+    //         matrix[i * n + j] = 0;
+    //     }
+    // }
 }
 
 void matrix_multiply(const double *A, const double *B, double *C, size_t p,
@@ -442,21 +250,17 @@ void rows_permutation(double *A, double *block1, double *block2, size_t n,
 void matrix_sum(double *A, double *B, double *C, size_t n,
                 size_t m) // C = A + B
 {
-    size_t i, j;
-    for (i = 0; i < n; i++) {
-        for (j = 0; j < m; j++) {
-            C[j + i * m] = A[j + i * m] + B[j + i * m];
-        }
+    size_t i;
+    for (i = 0; i < n * m; i++) {
+        C[i] = A[i] + B[i];
     }
 }
 
 void matrix_subtr(double *A, double *B, size_t n, size_t m) // A -= B
 {
-    size_t i, j;
-    for (i = 0; i < n; i++) {
-        for (j = 0; j < m; j++) {
-            A[j + i * m] -= B[j + i * m];
-        }
+    size_t i;
+    for (i = 0; i < n * m; i++) {
+        A[i] -= B[i];
     }
 }
 
@@ -480,11 +284,11 @@ int get_inverse_matrix(double *A, double *B, size_t m)
     double max, buf;
     unit_matrix(B, m);
     for (j = 0; j < m; j++) {
-        max = 0;
-        max_ind = 0;
-        for (i = j; i < m; i++) {
-            if (ABS(A[j + i * m]) > max) {
-                max = ABS(A[j + i * m]);
+        max = std::abs(A[j + j * m]);
+        max_ind = j;
+        for (i = j + 1; i < m; i++) {
+            if (std::abs(A[j + i * m]) > max) {
+                max = std::abs(A[j + i * m]);
                 max_ind = i;
             }
         }
@@ -493,18 +297,23 @@ int get_inverse_matrix(double *A, double *B, size_t m)
         if (max <= EPS) {
             return -1;
         }
-        for (i = j; i < m; i++) {
-            buf = A[i + j * m];
-            A[i + j * m] = A[i + max_ind * m];
-            A[i + max_ind * m] = buf;
-        }
 
-        for (i = 0; i < m; i++) {
-            buf = B[i + j * m];
-            B[i + j * m] = B[i + max_ind * m];
-            B[i + max_ind * m] = buf;
-        }
+        // Меняем местами строки, если нашли нужную
+        if (max_ind != j) {
+            for (i = j; i < m; i++) {
+                buf = A[i + j * m];
+                A[i + j * m] = A[i + max_ind * m];
+                A[i + max_ind * m] = buf;
+            }
 
+            for (i = 0; i < m; i++) {
+                buf = B[i + j * m];
+                B[i + j * m] = B[i + max_ind * m];
+                B[i + max_ind * m] = buf;
+            }
+        }
+        
+        max = A[j + j * m];
         A[j + j * m] = 1;
         for (i = j + 1; i < m; i++) {
             A[i + j * m] /= max;
@@ -514,18 +323,25 @@ int get_inverse_matrix(double *A, double *B, size_t m)
             B[i + j * m] /= max;
         }
 
+        // print_matrix(A, m, m);
+        // printf("^^^A\n");
+        // print_matrix(B, m, m);
+        // printf("^^^B\n");
         for (i = 0; i < m; i++) {
             if (i == j)
                 continue;
             max = A[j + i * m];
-            A[j + i * m] = 0;
-            for (k = j + 1; k < m; k++) {
-                A[k + i * m] -= max * A[k + j * m];
-            }
-            for (k = 0; k < m; k++) {
-                B[k + i * m] -= max * B[k + j * m];
+            if (std::abs(max) > EPS) {
+                A[j + i * m] = 0;
+                for (k = j + 1; k < m; k++) {
+                    A[k + i * m] -= max * A[k + j * m];
+                }
+                for (k = 0; k < m; k++) {
+                    B[k + i * m] -= max * B[k + j * m];
+                }
             }
         }
+
     }
     return 0;
 }
@@ -732,4 +548,150 @@ void print_matrix_l_x_n(double *matrix, size_t l, size_t n)
         }
         printf("\n");
     }
+}
+
+int run(
+        double *matrix,
+        double *inversed_matrix,
+        double *block_A,
+        double *block_B,
+        double *block_C,
+        size_t n,
+        size_t m,
+        size_t k,
+        size_t l,
+        size_t s,
+        char *filename
+    )
+{
+    size_t i, j, diag, row, min_norm_ind, p, q, r;
+    size_t bl = (l == 0) ? k : k + 1;
+    double min_norm, norm;
+
+
+    if (s == 0) {
+        if (read_matrix_from_file(matrix, n, filename) != 0) {
+            return 2;
+        }
+    } else {
+        if (fill_matrix(matrix, n, s) != 0) {
+            return 2;
+        }
+    }
+
+
+    unit_matrix(inversed_matrix, n);
+    // Пробегаюсь по диагональным элементам
+    for (diag = 0; diag < bl; diag++) {
+        // print_matrix(matrix, n, n);
+        // printf("\n");
+        min_norm = -1;
+        min_norm_ind = diag;
+        // Ищу в столбце матрицу у кооторой обратная имеет наименьшую норму
+        if (diag < k) {
+            for (row = diag; row < k; row++) {
+                get_block(matrix, block_A, n, m, k, l, diag, row);
+                if (get_inverse_matrix(block_A, block_B, m) == 0) {
+                    norm = get_norm(block_B, m);
+                    if (min_norm < 0 || norm < min_norm) {
+                        min_norm = norm;
+                        min_norm_ind = row;
+                    }
+                }
+            }
+        } else {
+            get_block(matrix, block_A, n, m, k, l, k, k);
+            if (get_inverse_matrix(block_A, block_B, l) == 0) {
+                norm = get_norm(block_B, l);
+                min_norm = norm;
+                min_norm_ind = k;
+            }
+        }
+        // printf("min_norm: %lf\n", min_norm);
+        if (min_norm < 0) {
+            fprintf(stderr, "Matrix is invertable!\n");
+            return -2;
+        }
+
+        // Переставляю строки так, чтобы на текущем диагональном элементе была
+        // матрица с наименьшей нормой её обратной
+        rows_permutation(matrix, block_A, block_B, n, m, k, l, min_norm_ind, diag,
+                         diag);
+        rows_permutation(inversed_matrix, block_A, block_B, n, m, k, l,
+                         min_norm_ind, diag, 0);
+
+        
+        // Нахожу обратную
+        get_block(matrix, block_A, n, m, k, l, diag, diag);
+        if (diag != k) {
+            if (get_inverse_matrix(block_A, block_B, m) != 0) {
+                fprintf(stderr, "Matrix is invertable!\n");
+                return -1;
+            }
+        } else {
+            if (get_inverse_matrix(block_A, block_B, l) != 0) {
+                fprintf(stderr, "Matrix is invertable!\n");
+                return -1;
+            }
+        }
+
+        // Вставляю единичную  на место текущего диагонального элемента
+        // put_block(matrix, block_A, n, m, k, l, diag, diag);
+
+        // Начиная со следующего каждый элемент в строке домножаю на обратную к диагональному
+        // block_B - обратная к диагональному
+        for (i = diag + 1; i < bl; i++) {
+            get_block(matrix, block_A, n, m, k, l, diag, i);
+            p = (diag == k ? l : m);
+            q = (i == k    ? l : m);
+            matrix_multiply(block_B, block_A, block_C, p, p, q);
+            put_block(matrix, block_C, n, m, k, l, diag, i);
+        }
+
+        // Каждый элемент той же строки матрицы В домножаю на эту же обратную
+        for (i = 0; i < bl; i++) {
+            get_block(inversed_matrix, block_A, n, m, k, l, diag, i);
+            p = (diag == k ? l : m);
+            q = (i == k    ? l : m);
+            matrix_multiply(block_B, block_A, block_C, p, p, q);
+            put_block(inversed_matrix, block_C, n, m, k, l, diag, i);
+        }
+
+        // Для каждой строки, кроме той, на которой есть текущий диагональный
+        for (i = 0; i < bl; i++) {
+            if (i != diag) {
+                // Запоминаем блок диагонального столбца и текущей строки
+
+                get_block(matrix, block_A, n, m, k, l, i, diag);
+                // Для каждого следующего элемента текущей строки, вычитаем из него А х С
+                for (j = diag + 1; j < bl; j++) { // j - номер столбца
+
+                    get_block(matrix, block_C, n, m, k, l, diag, j);
+
+                    p = (i == k    ? l : m);
+                    q = (diag == k ? l : m);
+                    r = (j == k    ? l : m);
+                    matrix_multiply(block_A, block_C, block_B, p, q, r);
+
+                    get_block(matrix, block_C, n, m, k, l, i, j);
+                    matrix_subtr(block_C, block_B, p, r);
+                    put_block(matrix, block_C, n, m, k, l, i, j);
+                }
+
+                // Аналогично для матрицы В
+                for (j = 0; j < bl; j++) {
+                    get_block(inversed_matrix, block_C, n, m, k, l, diag, j);
+                    p = (i == k    ? l : m);
+                    q = (diag == k ? l : m);
+                    r = (j == k    ? l : m);
+                    matrix_multiply(block_A, block_C, block_B, p, q, r);
+
+                    get_block(inversed_matrix, block_C, n, m, k, l, i, j);
+                    matrix_subtr(block_C, block_B, p, r);
+                    put_block(inversed_matrix, block_C, n, m, k, l, i, j);
+                }
+            }
+        }
+    }
+    return 0;
 }
