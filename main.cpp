@@ -6,7 +6,7 @@ int main(int argc, char *argv[])
     int z;
 
     if (argc < 5) {
-        fprintf(stderr, "Not enough arguments.\n");
+        fprintf(stderr, "[-] Not enough arguments.\n");
         return 1;
     }
 
@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
     char *filename = nullptr;
     if (s == 0) {
         if (argc < 6) {
-            fprintf(stderr, "File name do not defined.\n");
+            fprintf(stderr, "[-] File name do not defined.\n");
             return 1;
         }
         filename = argv[5];
@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
 
     clock_t t1 = clock();
     if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix || !norm ||
-        (z = run(matrix, inversed_matrix, block_A, block_B, block_C, n, m, k, l, s, filename))) {
+        (z = run(matrix, inversed_matrix, block_A, block_B, block_C, n, m, k, l, s, r, filename))) {
         if (block_A) delete[] block_A;
         if (block_B) delete[] block_B;
         if (block_C) delete[] block_C;
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
         if (inversed_matrix) delete[] inversed_matrix;
         if (norm) delete[] norm;
         if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix) {
-            fprintf(stderr, "Can't allocate memory for matrix\n");
+            fprintf(stderr, "[-] Can't allocate memory for matrix\n");
         }
         return z;
     }
@@ -56,6 +56,7 @@ int main(int argc, char *argv[])
         return z;
     } else {
         t2 -= clock_t();
+        printf("[+] Inversed matrix:\n");
         print_matrix(inversed_matrix, n, r);
         printf("%s : Task = %d Res1 = %e Res2 = %e T1 = %.2f T2 = %.2f S = %ld N = "
             "%ld M = %ld\n",

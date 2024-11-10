@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <limits>
+#include <cfloat>
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define ABS(a) ((a) > 0 ? (a) : (-a))
 
-double EPS = std::numeric_limits<double>::epsilon();
+double EPS = 10e-17;
 
 int run(double *matrix,
         double *inversed_matrix,
@@ -20,6 +20,7 @@ int run(double *matrix,
         size_t k,
         size_t l,
         size_t s,
+        size_t r,
         char *filename);
 int find_diff(double *matrix, double *inversed_matrix, double *block, double *norm, char* filename, int n, int m, int s, double &r1, double &r2);
 int fill_matrix(double *matrix, size_t n, size_t s);
@@ -111,30 +112,17 @@ void put_block(double *a, double *block, size_t n, size_t m, size_t k, size_t l,
     }
 }
 
-
-int find_diff(double *matrix, double *inversed_matrix, double* block, double *norm, char* filename, int n, int m, int s, double &r1, double &r2)
+void print_matrix(double *matrix, size_t n, size_t r)
 {
-    if (n < 11000) {
-        if (s == 0) {
-            if (read_matrix_from_file(matrix, n, filename) != 0) {
-                return 2;
-            }
-        } else {
-            if (fill_matrix(matrix, n, s) != 0) {
-                return 2;
-            }
+    size_t rows = (r > n) ? n : r;
+    size_t cols = (r > n) ? n : r;
+    for (size_t i = 0; i < rows; i++) {
+        for (size_t j = 0; j < cols; j++) {
+            printf(" %10.3e", matrix[i * n + j]);
         }
-
-        r1 = mult_sub_norm(matrix, inversed_matrix, block, norm, n, m);
-        r2 = mult_sub_norm(inversed_matrix, matrix, block, norm, n, m);
-
-    } else {
-        r1 = 0;
-        r2 = 0;
+        printf("\n");
     }
-    return 0;
 }
-
 
 int fill_matrix(double *matrix, size_t n, size_t s)
 {
@@ -143,17 +131,17 @@ int fill_matrix(double *matrix, size_t n, size_t s)
     case 1:
         for (i = 0; i < n; i++)
             for (j = 0; j < n; j++)
-                matrix[i * n + j] = n - MAX(i, j) + 2;
+                matrix[i * n + j] = n - MAX(i, j);
         break;
     case 2:
         for (i = 0; i < n; i++)
             for (j = 0; j < n; j++)
-                matrix[i * n + j] = MAX(i, j) - 1;
+                matrix[i * n + j] = MAX(i, j) + 1;
         break;
     case 3:
         for (i = 0; i < n; i++)
             for (j = 0; j < n; j++)
-                matrix[i * n + j] = ABS(i - j);
+                matrix[i * n + j] = (i > j ? i - j : j - i);
         break;
     case 4:
         for (i = 0; i < n; i++)
@@ -161,7 +149,7 @@ int fill_matrix(double *matrix, size_t n, size_t s)
                 matrix[i * n + j] = 1. / (i + j + 1);
         break;
     default:
-        fprintf(stderr, "Unknown formula %ld\n", s);
+        fprintf(stderr, "[-] Unknown formula %ld\n", s);
         return -1;
     }
     return 0;
@@ -171,13 +159,13 @@ int read_matrix_from_file(double *matrix, size_t n, const char *filename)
 {
     FILE *file = fopen(filename, "r");
     if (!file) {
-        fprintf(stderr, "Can't open file %s\n", filename);
+        fprintf(stderr, "[-] Can't open file %s\n", filename);
         return -1;
     }
 
     for (size_t i = 0; i < n * n; i++) {
         if (fscanf(file, "%lf", &matrix[i]) != 1) {
-            fprintf(stderr, "Can't read file.\n");
+            fprintf(stderr, "[-] Can't read file.\n");
             fclose(file);
             return -1;
         }
@@ -189,7 +177,7 @@ int read_matrix_from_file(double *matrix, size_t n, const char *filename)
 
 void unit_matrix(double *matrix, size_t n)
 {
-    memset(matrix, 0, n * sizeof(double));
+    memset(matrix, 0, n * n * sizeof(double));
     for (size_t i = 0; i < n; i++) {
         matrix[i * n + i] = 1;
     }
@@ -198,11 +186,6 @@ void unit_matrix(double *matrix, size_t n)
 void zero_matrix(double *matrix, size_t n, size_t m)
 {
     memset(matrix, 0, n * m * sizeof(double));
-    // for (size_t i = 0; i < n; i++) {
-    //     for (size_t j = 0; j < m; j++) {
-    //         matrix[i * n + j] = 0;
-    //     }
-    // }
 }
 
 void matrix_multiply(const double *A, const double *B, double *C, size_t p,
@@ -284,6 +267,8 @@ int get_inverse_matrix(double *A, double *B, size_t m)
     double max, buf;
     unit_matrix(B, m);
     for (j = 0; j < m; j++) {
+        // print_matrix(A, m, m);
+        // printf("\n");
         max = std::abs(A[j + j * m]);
         max_ind = j;
         for (i = j + 1; i < m; i++) {
@@ -294,7 +279,7 @@ int get_inverse_matrix(double *A, double *B, size_t m)
         }
         // printf("max: %lf, max_ind: %ld\n", max, max_ind);
 
-        if (max <= EPS) {
+        if (max < EPS) {
             return -1;
         }
 
@@ -328,16 +313,16 @@ int get_inverse_matrix(double *A, double *B, size_t m)
         // print_matrix(B, m, m);
         // printf("^^^B\n");
         for (i = 0; i < m; i++) {
-            if (i == j)
-                continue;
-            max = A[j + i * m];
-            if (std::abs(max) > EPS) {
-                A[j + i * m] = 0;
-                for (k = j + 1; k < m; k++) {
-                    A[k + i * m] -= max * A[k + j * m];
-                }
-                for (k = 0; k < m; k++) {
-                    B[k + i * m] -= max * B[k + j * m];
+            if (i != j) {
+                max = A[j + i * m];
+                if (std::abs(max) > EPS) {
+                    A[j + i * m] = 0;
+                    for (k = j + 1; k < m; k++) {
+                        A[k + i * m] -= max * A[k + j * m];
+                    }
+                    for (k = 0; k < m; k++) {
+                        B[k + i * m] -= max * B[k + j * m];
+                    }
                 }
             }
         }
@@ -528,18 +513,6 @@ double mult_sub_norm(double *a, double *b, double *pc, double *norm, size_t n, s
     return max_norm;
 }
 
-void print_matrix(double *matrix, size_t n, size_t r)
-{
-    size_t rows = (r > n) ? n : r;
-    size_t cols = (r > n) ? n : r;
-    for (size_t i = 0; i < rows; i++) {
-        for (size_t j = 0; j < cols; j++) {
-            printf(" %10.3e", matrix[i * n + j]);
-        }
-        printf("\n");
-    }
-}
-
 void print_matrix_l_x_n(double *matrix, size_t l, size_t n)
 {
     for (size_t i = 0; i < l; i++) {
@@ -561,13 +534,13 @@ int run(
         size_t k,
         size_t l,
         size_t s,
+        size_t print_size,
         char *filename
     )
 {
     size_t i, j, diag, row, min_norm_ind, p, q, r;
     size_t bl = (l == 0) ? k : k + 1;
     double min_norm, norm;
-
 
     if (s == 0) {
         if (read_matrix_from_file(matrix, n, filename) != 0) {
@@ -578,6 +551,11 @@ int run(
             return 2;
         }
     }
+    printf("[+] Given matrix:\n");
+    print_matrix(matrix, n, print_size);
+    norm = get_norm(matrix, n);
+    printf("[+] Norm is %e\n", norm);
+    EPS *= norm;
 
 
     unit_matrix(inversed_matrix, n);
@@ -608,8 +586,8 @@ int run(
             }
         }
         // printf("min_norm: %lf\n", min_norm);
-        if (min_norm < 0) {
-            fprintf(stderr, "Matrix is invertable!\n");
+        if (min_norm < EPS) {
+            fprintf(stderr, "[-] Matrix is invertable!\n");
             return -2;
         }
 
@@ -625,12 +603,12 @@ int run(
         get_block(matrix, block_A, n, m, k, l, diag, diag);
         if (diag != k) {
             if (get_inverse_matrix(block_A, block_B, m) != 0) {
-                fprintf(stderr, "Matrix is invertable!\n");
+                fprintf(stderr, "[-] Matrix is invertable!\n");
                 return -1;
             }
         } else {
             if (get_inverse_matrix(block_A, block_B, l) != 0) {
-                fprintf(stderr, "Matrix is invertable!\n");
+                fprintf(stderr, "[-] Matrix is invertable!\n");
                 return -1;
             }
         }
@@ -692,6 +670,30 @@ int run(
                 }
             }
         }
+    }
+    return 0;
+}
+
+
+int find_diff(double *matrix, double *inversed_matrix, double* block, double *norm, char* filename, int n, int m, int s, double &r1, double &r2)
+{
+    if (n < 11000) {
+        if (s == 0) {
+            if (read_matrix_from_file(matrix, n, filename) != 0) {
+                return 2;
+            }
+        } else {
+            if (fill_matrix(matrix, n, s) != 0) {
+                return 2;
+            }
+        }
+
+        r1 = mult_sub_norm(matrix, inversed_matrix, block, norm, n, m);
+        r2 = mult_sub_norm(inversed_matrix, matrix, block, norm, n, m);
+
+    } else {
+        r1 = 0;
+        r2 = 0;
     }
     return 0;
 }
