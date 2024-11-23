@@ -3,17 +3,24 @@
 int main(int argc, char *argv[])
 {
     double r1 = 0, r2 = 0;
-    int z;
+    int z = 0;
 
     if (argc < 5) {
         fprintf(stderr, "[-] Not enough arguments.\n");
         return 1;
     }
 
-    size_t n = atoi(argv[1]);
-    size_t m = atoi(argv[2]);
-    size_t r = atoi(argv[3]);
-    size_t s = atoi(argv[4]);
+    size_t n = 0, m = 0, r = 0, s = 0;
+    if (
+        sscanf(argv[1], "%lu", &n) != 1 ||
+        sscanf(argv[2], "%lu", &m) != 1 ||
+        sscanf(argv[3], "%lu", &r) != 1 ||
+        sscanf(argv[4], "%lu", &s) != 1
+    )
+    {
+        printf("[-] Mistake in args!\n");
+        return 2;
+    }
     size_t l = n % m;
     size_t k = n / m;
 
@@ -34,7 +41,7 @@ int main(int argc, char *argv[])
     double *norm = new double[n];
 
 
-    clock_t t1 = clock();
+    double t1 = clock();
     if (!block_C || !block_B || !block_C || !matrix || !inversed_matrix || !norm ||
         (z = run(matrix, inversed_matrix, block_A, block_B, block_C, n, m, k, l, s, r, filename))) {
         if (block_A) delete[] block_A;
@@ -49,19 +56,20 @@ int main(int argc, char *argv[])
         return z;
     }
 
-    t1 -= clock_t();
+    t1 = clock() - t1;
 
-    clock_t t2 = clock();
+
+    double t2 = clock();
     if ((z = find_diff(matrix, inversed_matrix, block_A, norm, filename, n, m, s, r1, r2)) != 0) {
         return z;
     } else {
-        t2 -= clock_t();
+        t2 = clock() - t2;
         printf("[+] Inversed matrix:\n");
         print_matrix(inversed_matrix, n, r);
         printf("%s : Task = %d Res1 = %e Res2 = %e T1 = %.2f T2 = %.2f S = %ld N = "
             "%ld M = %ld\n",
-            argv[0], 18, r1, r2, double(t1 / CLOCKS_PER_SEC),
-            double(t2 / CLOCKS_PER_SEC), s, n, m);
+            argv[0], 18, r1, r2, t1 / CLOCKS_PER_SEC,
+            t2 / CLOCKS_PER_SEC, s, n, m);
     }
 
 
