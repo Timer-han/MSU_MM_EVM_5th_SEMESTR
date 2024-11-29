@@ -8,7 +8,7 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define ABS(a) ((a) > 0 ? (a) : (-a))
 
-double EPS = 10e-17;
+double EPS = 1e-16;
 
 int run(double *matrix,
         double *inversed_matrix,
@@ -254,9 +254,10 @@ double get_norm(double *matrix, size_t m)
     for (j = 0; j < m; j++) {
         sum = 0;
         for (i = 0; i < m; i++) {
-            sum += ABS(matrix[j + i * m]);
+            sum += std::abs(matrix[j + i * m]);
         }
-        max = MAX(max, sum);
+        // printf("sum is %8.3e\n", sum);
+        max = std::max(max, sum);
     }
     return max;
 }
@@ -282,6 +283,11 @@ int get_inverse_matrix(double *A, double *B, size_t m)
         if (max < EPS) {
             return -1;
         }
+        // print_matrix(A, m, m);
+        // printf("^^^A0\n");
+        // print_matrix(B, m, m);
+        // printf("^^^B0\n");
+        // printf("max_ind is %ld\n", max_ind);
 
         // Меняем местами строки, если нашли нужную
         if (max_ind != j) {
@@ -315,17 +321,21 @@ int get_inverse_matrix(double *A, double *B, size_t m)
         for (i = 0; i < m; i++) {
             if (i != j) {
                 max = A[j + i * m];
-                if (std::abs(max) > EPS) {
-                    A[j + i * m] = 0;
-                    for (k = j + 1; k < m; k++) {
-                        A[k + i * m] -= max * A[k + j * m];
-                    }
-                    for (k = 0; k < m; k++) {
-                        B[k + i * m] -= max * B[k + j * m];
-                    }
+                A[j + i * m] = 0;
+                for (k = j + 1; k < m; k++) {
+                    A[k + i * m] -= max * A[k + j * m];
                 }
+                for (k = 0; k < m; k++) {
+                    B[k + i * m] -= max * B[k + j * m];
+                }
+                // if (std::abs(max) > EPS) {
+                // }
             }
         }
+        // print_matrix(A, m, m);
+        // printf("^^^A2\n\n");
+        // print_matrix(B, m, m);
+        // printf("^^^B2\n\n");
 
     }
     return 0;
@@ -556,6 +566,7 @@ int run(
     norm = get_norm(matrix, n);
     printf("[+] Norm is %e\n", norm);
     EPS *= norm;
+    printf("EPS is %8.3e\n", EPS);
 
 
     unit_matrix(inversed_matrix, n);
@@ -564,13 +575,15 @@ int run(
         // print_matrix(matrix, n, n);
         // printf("\n");
         min_norm = -1;
-        min_norm_ind = diag;
+        min_norm_ind = -1;
         // Ищу в столбце матрицу у кооторой обратная имеет наименьшую норму
         if (diag < k) {
             for (row = diag; row < k; row++) {
                 get_block(matrix, block_A, n, m, k, l, diag, row);
                 if (get_inverse_matrix(block_A, block_B, m) == 0) {
+                    // print_matrix(block_B, m, print_size);
                     norm = get_norm(block_B, m);
+                    // printf("norm is %8.3e\n", norm);
                     if (min_norm < 0 || norm < min_norm) {
                         min_norm = norm;
                         min_norm_ind = row;
@@ -585,9 +598,10 @@ int run(
                 min_norm_ind = k;
             }
         }
-        // printf("min_norm: %lf\n", min_norm);
-        if (min_norm < EPS) {
-            fprintf(stderr, "[-] Matrix is invertable!\n");
+        // printf("min_norm: %8.3e\n", min_norm);
+        // printf("Yep!\n");
+        if (min_norm_ind >= size_t(-4)) {
+            fprintf(stderr, "[-] Matrix is irreversible!\n");
             return -2;
         }
 
@@ -603,12 +617,12 @@ int run(
         get_block(matrix, block_A, n, m, k, l, diag, diag);
         if (diag != k) {
             if (get_inverse_matrix(block_A, block_B, m) != 0) {
-                fprintf(stderr, "[-] Matrix is invertable!\n");
+                fprintf(stderr, "[-] Matrix is irreversible!\n");
                 return -1;
             }
         } else {
             if (get_inverse_matrix(block_A, block_B, l) != 0) {
-                fprintf(stderr, "[-] Matrix is invertable!\n");
+                fprintf(stderr, "[-] Matrix is irreversible!\n");
                 return -1;
             }
         }
