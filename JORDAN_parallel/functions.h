@@ -697,7 +697,7 @@ int find_diff(double *matrix, double *inversed_matrix, double* block, double *no
 
         r1 = mult_sub_norm_p(matrix, inversed_matrix, block, norm, n, m, p, pi);
         r2 = mult_sub_norm_p(inversed_matrix, matrix, block, norm, n, m, p, pi);
-        printf("F pi: %ld r1 = %8.3e, r2 = %8.3e\n", pi, r1, r2);
+        // printf("F pi: %ld r1 = %8.3e, r2 = %8.3e\n", pi, r1, r2);
 
     } else {
         r1 = 0;
@@ -875,18 +875,7 @@ void *thread_func(void *args)
     zero_matrix_p(matrix, n, m, p, pi);
     unit_matrix_p(inversed_matrix, n, m, p, pi);
     synchronize(p);
-    // if (pi == 0) {
-    //     // printf("\n[+] step %ld\n", diag);
-    //     print_matrix(inversed_matrix, n, 10);
-    // }
 
-                                            // if (pi == 0) {
-                                            //     // printf("\n[+] Step %ld\n", diag);
-                                            //     printf("\n[+] matrix\n");
-                                            //     print_matrix(matrix, n, 4);
-                                            //     printf("[+] Inversed\n");
-                                            //     print_matrix(inversed_matrix, n, 4);
-                                            // }
 
     if (s == 0) {
         if (pi == 0) {
@@ -1110,7 +1099,6 @@ void *thread_func(void *args)
 	}
 
     a->t2 -= get_time();
-
 
 
 	a -> error_type = io_status::success;
