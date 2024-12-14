@@ -4,6 +4,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/sysinfo.h>
+#include <sys/time.h>
 #include <time.h>
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -51,19 +52,22 @@ public:
 	double error_flag = 0;
 
     // Данные для вычислений
-	size_t n = 0; // размер матрицы
-	size_t m = 0; // размер блока
-	size_t l = 0; // размер последнего блока
-	size_t k = 0; // количество блоков размера m в строке
-	size_t s = 0; // номер формулы
-    size_t q = 0; // число блочных строк для потока
-    size_t np = 0; //количество столбцов для потока матрицы
+	size_t n = 0;  // размер матрицы
+	size_t m = 0;  // размер блока
+	size_t l = 0;  // размер последнего блока
+	size_t k = 0;  // количество блоков размера m в строке
+	size_t s = 0;  // номер формулы
+	size_t r = 0;  // размер выводимой
+    double r1 = 0; // невязка 1
+    double r2 = 0; // невязка 2
+    double t1 = 0; // time 1
+    double t2 = 0; // time 2
     FILE *file;
-    double *block;
-    double *matrix;
-    double *inversed_matrix;
-    double *thread_part;
-    size_t part_len;
+    double *block = nullptr;
+    double *matrix = nullptr;
+    double *inversed_matrix = nullptr;
+    double *thread_part = nullptr;
+    double *norm = nullptr;
 };
 
 void synchronize(int p, double *a, int n, reduce reduce_type);
@@ -80,7 +84,7 @@ void *thread_func(void *args);
 //         size_t s,
 //         size_t r,
 //         char *filename);
-int find_diff(double *matrix, double *inversed_matrix, double *block, double *norm, FILE*file, int n, int m, int s, double &r1, double &r2);
+int find_diff(double *matrix, double *inversed_matrix, double *block, double *norm, FILE*file, int n, int m, int s, double &r1, double &r2, size_t p, size_t pi);
 int fill_matrix(double *matrix, size_t n, size_t s);
 int read_matrix_from_file(double *matrix, size_t n, FILE *file);
 void unit_matrix(double *matrix, size_t n);
@@ -98,7 +102,7 @@ void matrix_subtr(double *A, double *B, size_t n, size_t m);
 double get_norm(double *matrix, size_t m);
 int get_inverse_matrix(double *A, double *B, size_t m);
 // void mult(double *a, double *b, double *c, size_t n, size_t m);
-double mult_sub_norm(double *a, double *b, double *pc, double *norm, size_t n, size_t m);
+double mult_sub_norm_p(double *a, double *b, double *pc, double *norm, size_t n, size_t m, size_t p, size_t pi);
 void matrix_multiply(const double *A, const double *B, double *C, size_t p,
                      size_t q, size_t r);
 void zero_matrix(double *matrix, size_t n, size_t m);
@@ -112,6 +116,7 @@ void rows_permutation_p(double *A, double *block1, double *block2, size_t n,
                       size_t m, size_t k, size_t l, size_t i1, size_t i2,
                       size_t begin, size_t p, size_t pi);
 void *thread_func(void *args);
+double get_time();
 
 
 void synchronize(int p, double *a=nullptr, int n = 0, reduce reduce_type = reduce::abs_max) {
@@ -145,7 +150,7 @@ void synchronize(int p, double *a=nullptr, int n = 0, reduce reduce_type = reduc
                 if (std::abs(a[i]) < std::abs(r[i]))
                     r[i] = a[i];
         if (reduce_type == reduce::abs_min_first) {
-            printf("p=%d:  %8.3e, %8.3e, %8.3e, %8.3e\n", p, a[0], a[1], r[0], r[1]);
+            // printf("p=%d:  %8.3e, %8.3e, %8.3e, %8.3e\n", p, a[0], a[1], r[0], r[1]);
             if ((std::abs(a[0]) < std::abs(r[0]) || r[1] < -0.5) && a[1] > -0.5) {
                 // printf("Yep!\n");
                 for(int i = 0; i < n; i++) {
@@ -154,7 +159,9 @@ void synchronize(int p, double *a=nullptr, int n = 0, reduce reduce_type = reduc
             }
         }
         if (reduce_type == reduce::abs_max_first) {
-            if (std::abs(a[0]) > std::abs(r[0]) && a[1] < size_t(-4)) {
+            // printf("p=%d:  %8.3e, %8.3e, %8.3e, %8.3e\n", p, a[0], a[1], r[0], r[1]);
+            if ((std::abs(a[0]) > std::abs(r[0]) || r[1] < -0.5) && a[1] > -0.5) {
+                // printf("Yep!\n");
                 for(int i = 0; i < n; i++) {
                     r[i] = a[i];
                 }
@@ -479,7 +486,7 @@ int get_inverse_matrix(double *A, double *B, size_t m)
     return 0;
 }
 
-double mult_sub_norm(double *a, double *b, double *pc, double *norm, size_t n, size_t m)
+double mult_sub_norm_p(double *a, double *b, double *pc, double *norm, size_t n, size_t m, size_t p, size_t pi)
 {
     size_t i, j, s, r, t, q;
     size_t k = n / m;
@@ -492,7 +499,7 @@ double mult_sub_norm(double *a, double *b, double *pc, double *norm, size_t n, s
 
     // Проходим по всем блокам в матрице C
     for (i = 0; i < bl; i++) {
-        for (j = 0; j < bl; j++) {
+        for (j = pi; j < bl; j += p) {
             // Определяем размер текущего блока C[v x h]
             v = (i < k ? m : l); // вертикальный размер блока
             h = (j < k ? m : l); // горизонтальный размер блока
@@ -656,7 +663,11 @@ double mult_sub_norm(double *a, double *b, double *pc, double *norm, size_t n, s
         }
     }
 
+    // synchronize(p, &max_norm, 1, reduce::abs_max);
+    synchronize(p);
     for (i = 0; i < n; i++) max_norm = MAX(max_norm, norm[i]);
+    synchronize(p);
+
 
     return max_norm;
 }
@@ -671,10 +682,10 @@ void print_matrix_l_x_n(double *matrix, size_t l, size_t n)
     }
 }
 
-int find_diff(double *matrix, double *inversed_matrix, double* block, double *norm, FILE *file, int n, int m, int s, double &r1, double &r2)
+int find_diff(double *matrix, double *inversed_matrix, double* block, double *norm, FILE *file, int n, int m, int s, double &r1, double &r2, size_t p, size_t pi)
 {
     if (n < 11000) {
-        if (s == 0) {
+        if (s == 0 && pi == 0) {
             if (read_matrix_from_file(matrix, n, file) != 0) {
                 return 2;
             }
@@ -684,8 +695,9 @@ int find_diff(double *matrix, double *inversed_matrix, double* block, double *no
             }
         }
 
-        r1 = mult_sub_norm(matrix, inversed_matrix, block, norm, n, m);
-        r2 = mult_sub_norm(inversed_matrix, matrix, block, norm, n, m);
+        r1 = mult_sub_norm_p(matrix, inversed_matrix, block, norm, n, m, p, pi);
+        r2 = mult_sub_norm_p(inversed_matrix, matrix, block, norm, n, m, p, pi);
+        printf("F pi: %ld r1 = %8.3e, r2 = %8.3e\n", pi, r1, r2);
 
     } else {
         r1 = 0;
@@ -812,20 +824,27 @@ void rows_permutation_p(double *A, double *block1, double *block2, size_t n,
     }
 }
 
+double get_time() {
+    struct timeval buf;
+    gettimeofday(&buf, 0);
+    return buf.tv_sec + buf.tv_usec / 1e6;
+}
+
 
 void *thread_func(void *args)
 {
 	Args *a = (Args*) args;
 	
-	size_t p = a->p, pi = a->pi, n = a->n, m = a->m, s = a->s, k = a->k, l = a->l;
+	size_t p = a->p, pi = a->pi, n = a->n, m = a->m, s = a->s, k = a->k, l = a->l, r = a->r;
     size_t diag, i, j, bl = (l == 0) ? k : k + 1, min_norm_ind, row, x, y, z, begin;
-    double *matrix = a->matrix, *inversed_matrix = a->inversed_matrix, *block = a->block;
+    double *matrix = a->matrix, *inversed_matrix = a->inversed_matrix, *block = a->block, *norm_arr = a->norm;
+    // double r1 = a->r1, r2 = a->r2;
     double norm = 0, min_norm, buf_array[2];
     FILE *file = a->file;
     pthread_t tid = a->tid;
     cpu_set_t cpu;
 	int n_cpus = get_nprocs(); // число процессоров
-	int cpu_id = n_cpus - 1 - (k % n_cpus);
+	int cpu_id = n_cpus - 1 - (pi % n_cpus);
 
 	CPU_ZERO(&cpu); // вместо конструктора
     CPU_SET(cpu_id, &cpu);
@@ -850,6 +869,8 @@ void *thread_func(void *args)
         delete[] block_C;
 		return nullptr;
 	}
+
+    a->t1 = get_time();
 
     zero_matrix_p(matrix, n, m, p, pi);
     unit_matrix_p(inversed_matrix, n, m, p, pi);
@@ -1057,17 +1078,40 @@ void *thread_func(void *args)
         synchronize(p);
     }
 
-
-
-
 	synchronize(p, & a-> error_flag, 1);
-	
 	if (a -> error_flag > 0) {
 		delete[] block_A;
         delete[] block_B;
         delete[] block_C;
 		return nullptr;
 	}
+
+    a->t1 -= get_time();
+
+    if (pi == 0) {
+        printf("\n[+] Inversed matrix:\n");
+        print_matrix(inversed_matrix, n, r);
+    }
+
+
+    a->t2 = get_time();
+
+    if (find_diff(matrix, inversed_matrix, block_A, norm_arr, file, n, m, s, a->r1, a->r2, p, pi) != 0) {
+        a->error_type = io_status::error_read;
+        a->error_flag = 1;
+    }
+
+	synchronize(p, & a-> error_flag, 1);
+    if (a -> error_flag > 0) {
+		delete[] block_A;
+        delete[] block_B;
+        delete[] block_C;
+		return nullptr;
+	}
+
+    a->t2 -= get_time();
+
+
 
 	a -> error_type = io_status::success;
 

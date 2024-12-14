@@ -70,8 +70,10 @@ int main(int argc, char *argv[])
         a[i].m = m;
         a[i].s = s;
 		a[i].p = p;
+		a[i].r = r;
 		a[i].pi = i;
 		a[i].file = file;
+        a[i].norm = norm;
         a[i].block = block_A;
         a[i].matrix = matrix;
         a[i].inversed_matrix = inversed_matrix;
@@ -107,8 +109,8 @@ int main(int argc, char *argv[])
 	}
     // printf("Yep!\n");
     t1 = clock() - t1;
-    printf("\n[+] Inversed matrix:\n");
-    print_matrix(inversed_matrix, n, r);
+    // printf("\n[+] Inversed matrix:\n");
+    // print_matrix(inversed_matrix, n, r);
 
 
     // if ((z = run(matrix, inversed_matrix, block_A, block_B, block_C, n, m, k, l, s, r, filename))) {
@@ -126,25 +128,31 @@ int main(int argc, char *argv[])
 
 
     
-    double t2 = clock();
-    if ((error = find_diff(matrix, inversed_matrix, block_A, norm, file, n, m, s, r1, r2)) != 0) {
-        delete[] matrix;
-        delete[] inversed_matrix;
-        delete[] block_A;
-        delete[] norm;
-        delete[] a;
-        if (file) fclose(file);
-        return error;
-    } else {
-        t2 = clock() - t2;
-        // printf("[+] Inversed matrix:\n");
-        // print_matrix(inversed_matrix, n, r);
-        printf("%s : Task = %d Res1 = %e Res2 = %e T1 = %.2f T2 = %.2f S = %ld N = "
-            "%ld M = %ld P = %ld\n",
-            argv[0], 18, r1, r2, t1 / CLOCKS_PER_SEC,
-            t2 / CLOCKS_PER_SEC, s, n, m, p);
-    }
+    // double t2 = clock();
+    // if ((error = find_diff(matrix, inversed_matrix, block_A, norm, file, n, m, s, r1, r2)) != 0) {
+    //     delete[] matrix;
+    //     delete[] inversed_matrix;
+    //     delete[] block_A;
+    //     delete[] norm;
+    //     delete[] a;
+    //     if (file) fclose(file);
+    //     return error;
+    // } else {
+    //     t2 = clock() - t2;
+    //     // printf("[+] Inversed matrix:\n");
+    //     // print_matrix(inversed_matrix, n, r);
+    //     printf("%s : Task = %d Res1 = %e Res2 = %e T1 = %.2f T2 = %.2f S = %ld N = "
+    //         "%ld M = %ld P = %ld\n",
+    //         argv[0], 18, r1, r2, t1 / CLOCKS_PER_SEC,
+    //         t2 / CLOCKS_PER_SEC, s, n, m, p);
+    // }
 
+    r1 = a[0].r1;
+    r2 = a[0].r2;
+
+    printf("%s : Task = %d Res1 = %e Res2 = %e T1 = %.2f T2 = %.2f S = %ld N = "
+        "%ld M = %ld P = %ld\n",
+        argv[0], 18, r1, r2, -a[0].t1, -a[0].t2, s, n, m, p);
 
 
     delete[] matrix;
