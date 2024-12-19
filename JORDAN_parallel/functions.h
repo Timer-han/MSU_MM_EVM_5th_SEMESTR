@@ -777,7 +777,7 @@ double get_norm_p(double *matrix, size_t n, size_t m, size_t p, size_t pi)
     size_t i, j, k;
     double max = 0, sum;
     for (j = pi * m; j < n; j += p * m) {
-        for (k = j; k < j + m; k++) {
+        for (k = j; k < j + m && k < n; k++) {
             sum = 0;
             for (i = 0; i < n; i++) {
                 sum += std::abs(matrix[k + i * n]);
