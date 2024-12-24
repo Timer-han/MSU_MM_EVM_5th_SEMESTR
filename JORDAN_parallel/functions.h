@@ -310,7 +310,7 @@ int fill_matrix(double *matrix, size_t n, size_t s)
 int read_matrix_from_file(double *matrix, size_t n, FILE* file)
 {
     rewind(file);
-    printf("size is %ld\n", n * n);
+    // printf("size is %ld\n", n * n);
     for (size_t i = 0; i < n * n; i++) {
         if (fscanf(file, "%lf", &matrix[i]) != 1) {
             fprintf(stderr, "[-] Can't read file.\n");
@@ -689,11 +689,12 @@ int find_diff(double *matrix, double *inversed_matrix, double* block, double *no
             if (read_matrix_from_file(matrix, n, file) != 0) {
                 return 2;
             }
-        } else {
+        } else if (s != 0) {
             if (fill_matrix(matrix, n, s) != 0) {
                 return 2;
             }
         }
+        synchronize(p);
 
         r1 = mult_sub_norm_p(matrix, inversed_matrix, block, norm, n, m, p, pi);
         r2 = mult_sub_norm_p(inversed_matrix, matrix, block, norm, n, m, p, pi);
@@ -709,9 +710,10 @@ int find_diff(double *matrix, double *inversed_matrix, double* block, double *no
 
 void zero_matrix_p(double *matrix, size_t n, size_t m, size_t p, size_t pi)
 {
+    size_t l = n % m, k = n / m, bl = (l > 0 ? k + 1 : k);
     for (size_t i = 0; i < n; i++) {
-        for (size_t j = pi; j < n; j += p * m) {
-            memset(matrix + i * n + j, 0, m);
+        for (size_t j = pi; j < bl; j += p) {
+            memset(matrix + i * n + j * m, 0, (j == k ? l : m) * sizeof(double));
         }
     }
 }
@@ -907,8 +909,8 @@ void *thread_func(void *args)
 
     norm = get_norm_p(matrix, n, m, p, pi);
 	synchronize(a->p, &norm, 1);
-
 	if (pi == 0) EPS *= norm;
+    // printf("norm = %8.3e, eps = %8.3e\n", norm, EPS);
 	synchronize(a->p);
 
     // Пробегаюсь по диагональным элементам
@@ -942,10 +944,12 @@ void *thread_func(void *args)
             }
         }
         buf_array[0] = min_norm;
-        buf_array[1] = min_norm > EPS ? min_norm_ind : -1.;
+        buf_array[1] = min_norm_ind * 1. > 1e+13 ? -1. : min_norm_ind;
+        // buf_array[1] = buf_array[1] * 1. > 1e+13 ? -1. : buf_array[1];
+
         
-        // printf("%ld min_norm: %8.3e, ind: %.0e\n", pi, buf_array[0], buf_array[1]);
-        // printf("%ld min_norm: %8.3e, ind: %ld\n", pi, min_norm, min_norm_ind);
+        // printf("%ld min_norm: %8.3e, ind: %.0e ---buf\n", pi, buf_array[0], buf_array[1]);
+        // printf("%ld min_norm: %8.3e, ind: %lu\n", pi, min_norm, min_norm_ind);
         synchronize(p, buf_array, 2, reduce::abs_min_first);
         // if (pi == 0) printf("%ld min_norm: %8.3e, ind: %.0e\n", pi, buf_array[0], buf_array[1]);
         // printf("Yep!\n");
@@ -1021,8 +1025,13 @@ void *thread_func(void *args)
         // Каждый элемент той же строки матрицы В домножаю на эту же обратную
         for (i = pi; i < bl; i+=p) {
             get_block(inversed_matrix, block_A, n, m, k, l, diag, i);
+            // printf("------matrix------\n");
+            // printf("Diag = %ld, i = %ld\n", diag, i);
+            // print_matrix(block_A, (i < k ? m : l), 4);
             x = (diag == k ? l : m);
             y = (i == k    ? l : m);
+            // printf("x = %ld, y = %ld\n", x, y);
+            // printf("------------------\n");
             matrix_multiply(block_B, block_A, block_C, x, x, y);
             put_block(inversed_matrix, block_C, n, m, k, l, diag, i);
         }
@@ -1089,7 +1098,6 @@ void *thread_func(void *args)
         a->error_type = io_status::error_read;
         a->error_flag = 1;
     }
-
 	synchronize(p, & a-> error_flag, 1);
     if (a -> error_flag > 0) {
 		delete[] block_A;
