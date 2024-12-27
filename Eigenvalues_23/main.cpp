@@ -18,6 +18,8 @@ int main(int argc, char *argv[])
         return -2;
     }
 
+    m = std::min(n, m);
+
     if (k == 0 && argc < 6) {
         printf("[-] Can't find filename!\n");
         return -3;
@@ -44,18 +46,25 @@ int main(int argc, char *argv[])
         return -4;
     }
 
-    if (k == 0 && read_matrix(filename, matrix, n) != 0) {
-        printf("[-] Bad file!\n");
+    if (k == 0){
+        if (read_matrix(filename, matrix, n) != 0) {
+            printf("[-] Bad file!\n");
+            delete[] matrix;
+            delete[] vector1;
+            delete[] vector2;
+            delete[] vector3;
+            delete[] eigenvals;
+            return -5;
+        }
+    } else if (k > 0 && k < 5) {
+        fill_matrix(matrix, n, k);
+    } else if (k < 0 || k > 4) {
+        printf("[-] Unknown formula %d!\n", k);
         delete[] matrix;
         delete[] vector1;
         delete[] vector2;
         delete[] vector3;
         delete[] eigenvals;
-        return -5;
-    } else if (k > 0 && k < 5) {
-        fill_matrix(matrix, n, k);
-    } else if (k < 0 || n > 4) {
-        printf("[-] Unknown formula %d!\n", k);
         return -6;
     }
 
